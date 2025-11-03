@@ -6,17 +6,30 @@ app = marimo.App(width="medium")
 
 @app.cell
 def _():
+    import micropip
+    return (micropip,)
+
+
+@app.cell
+async def _(micropip):
+    await micropip.install("altair")
+    await micropip.install("openpyxl")
+    return
+
+
+@app.cell
+def _():
     import marimo as mo 
     import pandas as pd 
     import numpy as np
     import altair as alt
     import os 
-    return alt, mo, np, os, pd
+    return alt, mo, np, pd
 
 
 @app.cell
-def _(mo, os, pd):
-    fee_data = pd.read_excel(os.path.join(mo.notebook_location(),'public/fee_data.xlsx'))
+def _(mo, pd):
+    fee_data = pd.read_excel(str(mo.notebook_location() / 'public' / 'fee_data.xlsx'))
     return (fee_data,)
 
 
@@ -84,6 +97,51 @@ def _(mo, pd):
         ind_setup_editor,
         remove_weekly,
     )
+
+
+@app.cell(hide_code=True)
+def _(coop_results_, ind_df_results, pd):
+    results_summary = ind_df_results.query('Period < 2').copy().rename(columns={'Individual payers fees': 'Fees', 'Individual bin count': 'Bins'})
+    results_summary['Payer'] = 'Individual'
+
+    _coop_period1 = coop_results_.query('Period < 2').copy().rename(columns={'Coop fees': 'Fees', 'Coop bin count': 'Bins'})
+    _coop_period1['Payer'] = 'Coop'
+
+    results_summary = pd.concat([results_summary, _coop_period1], ignore_index=True)
+    results_summary["Period"] = results_summary["Period"].astype(str).str.replace('0','0: Before Change').str.replace('1','1: First year after change')
+    return (results_summary,)
+
+
+@app.cell(hide_code=True)
+def _(coop_results_, ind_df_results, mo, pd, results_summary):
+    last_period_ind = ind_df_results.groupby(['Scenario'], as_index=False)['Period'].max()
+    last_period_coop = coop_results_.groupby(['Scenario'], as_index=False)['Period'].max()
+
+    latest_ind = ind_df_results.merge(last_period_ind, on=["Scenario",'Period'], how='inner').rename(columns={'Individual payers fees': 'Fees', 'Individual bin count': 'Bins'})
+    latest_ind['Period'] = '2: Last forecasted period'
+    latest_ind['Payer'] = 'Individual'
+    latest_coop = coop_results_.merge(last_period_coop, on=["Scenario",'Period'], how='inner').rename(columns={'Coop fees': 'Fees', 'Coop bin count': 'Bins'})
+    latest_coop['Period'] = '2: Last forecasted period'
+    latest_coop['Payer'] = 'Coop'
+
+    results_summary_latest = pd.concat([results_summary, latest_ind, latest_coop], ignore_index=True)
+    results_summary_latest['Fees'] = results_summary_latest['Fees'].round(0).astype(int)
+    results_summary_totals = results_summary_latest.groupby(['Scenario','Period'], as_index=False)['Fees'].sum()
+    results_summary_totals['Payer'] = 'Total'
+
+    final_results = pd.concat([results_summary_latest, results_summary_totals], ignore_index=True).sort_values(by=['Scenario', 'Payer', 'Period'])
+
+    results_pivot = pd.pivot(final_results, columns='Period', index=['Scenario','Payer'], values=['Fees'])
+
+    mo.vstack([
+        mo.md('## Simulation results (Fees)'),
+        mo.md('Below you can see the total results for the current simulation setup for fees in EUR.'),
+        mo.md('The table shows fees before change implementation, first year after implementation and in the last projected period.'),
+        mo.md('Then the following charts show a detailed evolution over time of fee collection and the number of bins.'),
+        results_pivot
+    ])
+
+    return
 
 
 @app.cell(hide_code=True)
@@ -174,7 +232,7 @@ def _(
     coop_results = pd.DataFrame({'Coop fees': simple_coop_forecast_fees.sum(axis=1),
                                'Coop bin count': simple_coop_forecast_bins.sum(axis=1),
                                'Period': np.arange(forecast_periods_coop.value),
-                                'Scenario': 'Simple'})
+                                'Scenario': 'Simple model'})
     return (coop_results,)
 
 
