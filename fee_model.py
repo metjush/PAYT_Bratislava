@@ -65,9 +65,10 @@ def _(mo, pd):
     ind_setup_editor = mo.ui.data_editor(data=ind_setup_df)
 
     fee_hike_coop = mo.ui.slider(0,100, show_value=True, include_input=True, value=30)
+    persons_per_bin_coop = mo.ui.slider(45,200,show_value=True, include_input=True, value=45)
     forecast_periods_coop = mo.ui.slider(0,20, show_value=True, include_input=True, value=5)
 
-    coop_setup_df = pd.DataFrame(columns=['Fee Hike','Year Gap'], data=[[30,5]])
+    coop_setup_df = pd.DataFrame(columns=['Fee Hike','Number of people per bin','Year Gap'], data=[[30,45,5]])
     coop_setup_editor = mo.ui.data_editor(data=coop_setup_df)
 
     mo.vstack([
@@ -81,7 +82,8 @@ def _(mo, pd):
         ind_setup_editor,
         mo.md('### Coops/businesses (simple setup)'),
         mo.hstack([mo.md('**1 Increase in standard fee in %**'), fee_hike_coop], align='center'),
-        mo.hstack([mo.md('**2 Number of years to forecast**'), forecast_periods_coop], align='center'),
+        mo.hstack([mo.md('**2 Number of people per 1110l bin**'), persons_per_bin_coop], align='center'),
+        mo.hstack([mo.md('**3 Number of years to forecast**'), forecast_periods_coop], align='center'),
         mo.md('### Coops/businesses (complex setup)'),
         coop_setup_editor
 
@@ -95,6 +97,7 @@ def _(mo, pd):
         forecast_periods,
         forecast_periods_coop,
         ind_setup_editor,
+        persons_per_bin_coop,
         remove_weekly,
     )
 
@@ -223,8 +226,9 @@ def _(
     forecast_periods_coop,
     np,
     pd,
+    persons_per_bin_coop,
 ):
-    simple_coop_forecast_bins, latest_sample = bin_per_point_forecast(coop_old_bin_ratio, coop_old_points, coop_fee_hike_pct, forecast_periods_coop.value)
+    simple_coop_forecast_bins, latest_sample = bin_per_point_forecast(coop_old_bin_ratio, coop_old_points, coop_fee_hike_pct, forecast_periods_coop.value, people_per_bin=persons_per_bin_coop.value)
     simple_coop_forecast_fees = simple_coop_forecast_bins * coop_new_fees.T
     simple_coop_forecast_fees[0] = simple_coop_forecast_bins[0] * coop_old_fees.T 
     simple_coop_forecast_fees
@@ -364,14 +368,18 @@ def _(
     coop_setup_editor,
     np,
 ):
-    def bin_count_response(price_increase: float, period:int, scale: float = 6.0):
+    def bin_count_response(price_increase: float, period:int, people_per_bin:int = 45, previous_per_bin:int = 45, scale: float = 6.0):
 
         if period == 0:
             return 1
 
-        return 1 - (price_increase / (scale ** period))
+        per_bin_factor = 1
+        if previous_per_bin < people_per_bin:
+            per_bin_factor = 1 - (np.log10(people_per_bin - 44) / (scale * 1.5))
 
-    def bin_per_point_forecast(initial_state: np.array, point_count: np.array, price_increase: float, periods: int):
+        return (1 - (price_increase / (scale ** period)))*per_bin_factor
+
+    def bin_per_point_forecast(initial_state: np.array, point_count: np.array, price_increase: float, periods: int, people_per_bin: int = 45):
 
         # for each period do this:
         ## get bin_count_response for given period and price increase
@@ -386,9 +394,10 @@ def _(
         ## 
 
         bin_count_history = []
+        previous_per_bin = 45
         for period in range(periods):
 
-            _factor = bin_count_response(price_increase, period)
+            _factor = bin_count_response(price_increase, period, people_per_bin, previous_per_bin)
             new_state = initial_state * _factor 
             below_one = new_state < 1
 
@@ -407,6 +416,8 @@ def _(
             else:
                 bin_count_history = np.concatenate([bin_count_history, new_bins.T])
 
+            if period > 0:
+                previous_per_bin = people_per_bin
             initial_state = new_state
 
         return bin_count_history, new_state
@@ -426,7 +437,7 @@ def _(
             step_values = step[1]
             price_hike = price_hike + (step_values['Fee Hike'] / 100.)
             _new_fees = old_fees * (1 + price_hike)
-            _evolution, _latest_ratio = bin_per_point_forecast(baseline_ratio, baseline_points, price_hike, step_values['Year Gap']+1)
+            _evolution, _latest_ratio = bin_per_point_forecast(baseline_ratio, baseline_points, price_hike, step_values['Year Gap']+1, step_values['Number of people per bin'])
             _fee_evolution = _evolution * _new_fees.T 
             if len(bin_evolution) == 0:
                 _fee_evolution[0] = _evolution[0] * old_fees.T
@@ -491,13 +502,11 @@ def _(np):
 
         monthly_unit = 1 - unit(factor1, year)
         monthly_split = unit(factor_split[0], year), unit(factor_split[1], year)
-        big_monthly_unit = 1-unit(factor2, year)
-        big_monthly_split = [0, 0, unit(factor2, year), 0, big_monthly_unit]
+        big_monthly_split = [0, 0, monthly_split[0], monthly_split[1], monthly_unit]
         if remove_weekly:
             monthly_unit = 0
-            big_monthly_unit = 0
             monthly_split = 0.2, 0.8
-            big_monthly_split = [0.05, 0.8, 0, 0.15, 0]
+            big_monthly_split = [0.05, 0.15, 0, 0.8, 0]
 
         matrix = [
             [1,0,0,0,0],
