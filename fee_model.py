@@ -64,12 +64,6 @@ def _(mo, pd):
     ind_setup_df = pd.DataFrame(columns=['Fee Hike','Year Gap','Disable Weekly Option'], data=[[30,5,False]])
     ind_setup_editor = mo.ui.data_editor(data=ind_setup_df)
 
-    fee_hike_coop = mo.ui.slider(0,100, show_value=True, include_input=True, value=30)
-    persons_per_bin_coop = mo.ui.slider(45,200,show_value=True, include_input=True, value=45)
-    forecast_periods_coop = mo.ui.slider(0,20, show_value=True, include_input=True, value=5)
-
-    coop_setup_df = pd.DataFrame(columns=['Fee Hike','Number of people per bin','Year Gap'], data=[[30,45,5]])
-    coop_setup_editor = mo.ui.data_editor(data=coop_setup_df)
 
     mo.vstack([
         mo.md('## Parameter setup'),
@@ -79,27 +73,73 @@ def _(mo, pd):
         mo.hstack([mo.md('**3 Number of years to forecast**'), forecast_periods], align='center'),
         mo.md('### Individual homes (complex setup)'),
         mo.md('In this table, you can add multiple rows as steps in gradual fee increase / change'),
-        ind_setup_editor,
-        mo.md('### Coops/businesses (simple setup)'),
+        ind_setup_editor
+
+    ])
+
+    return fee_hike, forecast_periods, ind_setup_editor, remove_weekly
+
+
+@app.cell(hide_code=True)
+def _(mo, pd):
+
+    fee_hike_coop = mo.ui.slider(0,100, show_value=True, include_input=True, value=30)
+    persons_per_bin_coop = mo.ui.slider(45,200,show_value=True, include_input=True, value=45)
+    forecast_periods_coop = mo.ui.slider(0,20, show_value=True, include_input=True, value=5)
+
+    coop_setup_df = pd.DataFrame(columns=['Fee Hike','Number of people per bin','Year Gap'], data=[[30,45,5]])
+    coop_setup_editor = mo.ui.data_editor(data=coop_setup_df)
+
+    mo.vstack([
+         mo.md('### Coops/businesses (simple setup)'),
         mo.hstack([mo.md('**1 Increase in standard fee in %**'), fee_hike_coop], align='center'),
         mo.hstack([mo.md('**2 Number of people per 1110l bin**'), persons_per_bin_coop], align='center'),
         mo.hstack([mo.md('**3 Number of years to forecast**'), forecast_periods_coop], align='center'),
         mo.md('### Coops/businesses (complex setup)'),
         coop_setup_editor
-
     ])
-
-
     return (
         coop_setup_editor,
-        fee_hike,
         fee_hike_coop,
-        forecast_periods,
         forecast_periods_coop,
-        ind_setup_editor,
         persons_per_bin_coop,
-        remove_weekly,
     )
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(
+        r"""
+    ## Sensitivity settings (behavioral response)
+
+    The default model assumes a behavioral response to the changes in fees and other conditions that is most consistent with past trends. This data is very limited, and so we need to model different scenarios of how people might react to policy changes. 
+
+    You can choose these following scenarios to simulate:
+
+    1. **Baseline**: This is the default scenario that mostly follows an extrapolation of what was observed after the last change to the fee structure. It assumes a fairly muted behavioral response to an increase in fees. However, the capacity of households to bear higher fees is assumed to fall with greater increases (even when you stagger them in multiple steps).
+    2. **Austerity**: This is the pessimistic scenario where we assume that compared to 2023, the financial situation of households has worsened (following inflation and increases in other national taxes). Therefore the reaction to a higher waste fee will be more pronounced this time.
+    3. **Business as usual**: This scenario assumes no behavioral changes to an increase in fees. The only reaction that is required is when the weekly schedule is disabled. This will lead to a transfer of all households with a weekly schedule to a fortnightly schedule with the larger bin.
+    """
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    scenario_selector = mo.ui.dropdown(options = {'1 Baseline': 1, '2 Austerity': 2, '3 Business as usual': 3},
+                                       allow_select_none=False,
+                                       searchable=True, 
+                                       label="Select the behavioral scenario: ",
+                                       value='1 Baseline'
+                                      )
+    scenario_selector
+    return (scenario_selector,)
+
+
+@app.cell(hide_code=True)
+def _(scenario_selector):
+    SCENARIO = scenario_selector.value
+    return (SCENARIO,)
 
 
 @app.cell(hide_code=True)
@@ -143,7 +183,6 @@ def _(coop_results_, ind_df_results, mo, pd, results_summary):
         mo.md('Then the following charts show a detailed evolution over time of fee collection and the number of bins.'),
         results_pivot
     ])
-
     return
 
 
@@ -217,6 +256,7 @@ def _(fee_data, fee_hike_coop):
 
 @app.cell
 def _(
+    SCENARIO,
     bin_per_point_forecast,
     coop_fee_hike_pct,
     coop_new_fees,
@@ -228,7 +268,7 @@ def _(
     pd,
     persons_per_bin_coop,
 ):
-    simple_coop_forecast_bins, latest_sample = bin_per_point_forecast(coop_old_bin_ratio, coop_old_points, coop_fee_hike_pct, forecast_periods_coop.value, people_per_bin=persons_per_bin_coop.value)
+    simple_coop_forecast_bins, latest_sample = bin_per_point_forecast(coop_old_bin_ratio, coop_old_points, coop_fee_hike_pct, forecast_periods_coop.value, people_per_bin=persons_per_bin_coop.value, scenario=SCENARIO)
     simple_coop_forecast_fees = simple_coop_forecast_bins * coop_new_fees.T
     simple_coop_forecast_fees[0] = simple_coop_forecast_bins[0] * coop_old_fees.T 
     simple_coop_forecast_fees
@@ -241,8 +281,8 @@ def _(
 
 
 @app.cell
-def _(coop_results, np, pd, stepped_coop):
-    stepped_coop_bins, stepped_coop_fees = stepped_coop()
+def _(SCENARIO, coop_results, np, pd, stepped_coop):
+    stepped_coop_bins, stepped_coop_fees = stepped_coop(SCENARIO)
     stepped_coop_bins_total = stepped_coop_bins.sum(axis=1)
     stepped_coop_fees_total = stepped_coop_fees.sum(axis=1)
 
@@ -277,6 +317,7 @@ def _(fee_hike, ind_baseline):
 
 @app.cell
 def _(
+    SCENARIO,
     forecast_periods,
     ind_baseline_bins,
     ind_fee_hike_pct,
@@ -286,7 +327,7 @@ def _(
     run_individual,
 ):
     # forecast individual homes
-    ind_bin_evolution = run_individual(ind_baseline_bins, forecast_periods.value, 0, price_increase=ind_fee_hike_pct, remove_weekly=remove_weekly.value)
+    ind_bin_evolution = run_individual(ind_baseline_bins, forecast_periods.value, 0, price_increase=ind_fee_hike_pct, remove_weekly=remove_weekly.value, scenario=SCENARIO)
     ind_fee_evolution = ind_bin_evolution * ind_new_fees.T
     ind_fee_evolution[0] = ind_bin_evolution[0] * ind_old_fees.T # first year keeps old fees
     return ind_bin_evolution, ind_fee_evolution
@@ -300,8 +341,15 @@ def _(ind_bin_evolution, ind_fee_evolution):
 
 
 @app.cell
-def _(ind_baseline_bins, ind_old_fees, ind_setup_editor, np, run_individual):
-    def stepped_individual():
+def _(
+    SCENARIO,
+    ind_baseline_bins,
+    ind_old_fees,
+    ind_setup_editor,
+    np,
+    run_individual,
+):
+    def stepped_individual(scenario:int = 1):
 
         old_fees = ind_old_fees.copy() 
         baseline_bins = ind_baseline_bins.copy() 
@@ -313,7 +361,7 @@ def _(ind_baseline_bins, ind_old_fees, ind_setup_editor, np, run_individual):
             step_values = step[1]
             price_hike = price_hike + (step_values['Fee Hike'] / 100.)
             _new_fees = old_fees * (1 + price_hike)
-            _evolution = run_individual(baseline_bins, step_values['Year Gap'], 0, price_increase = price_hike, remove_weekly = step_values['Disable Weekly Option'])
+            _evolution = run_individual(baseline_bins, step_values['Year Gap'], 0, price_increase = price_hike, remove_weekly = step_values['Disable Weekly Option'], scenario = scenario)
             _fee_evolution = _evolution * _new_fees.T 
             if len(bin_evolution) == 0:
                 _fee_evolution[0] = _evolution[0] * old_fees.T
@@ -328,7 +376,7 @@ def _(ind_baseline_bins, ind_old_fees, ind_setup_editor, np, run_individual):
 
         return bin_evolution, fee_evolution
 
-    stepped_ind_bins, stepped_ind_fees = stepped_individual()
+    stepped_ind_bins, stepped_ind_fees = stepped_individual(SCENARIO)
     stepped_ind_bins_total = stepped_ind_bins.sum(axis=1)
     stepped_ind_fees_total = stepped_ind_fees.sum(axis=1)
     return stepped_ind_bins_total, stepped_ind_fees_total
@@ -368,10 +416,13 @@ def _(
     coop_setup_editor,
     np,
 ):
-    def bin_count_response(price_increase: float, period:int, people_per_bin:int = 45, previous_per_bin:int = 45, scale: float = 6.0):
+    def bin_count_response(price_increase: float, period:int, people_per_bin:int = 45, previous_per_bin:int = 45, scale: float = 6.0, scenario: int = 1):
 
-        if period == 0:
+        if period == 0 or scenario == 3:
             return 1
+
+        if scenario == 2:
+            scale = 3.5
 
         per_bin_factor = 1
         if previous_per_bin < people_per_bin:
@@ -379,7 +430,7 @@ def _(
 
         return (1 - (price_increase / (scale ** period)))*per_bin_factor
 
-    def bin_per_point_forecast(initial_state: np.array, point_count: np.array, price_increase: float, periods: int, people_per_bin: int = 45):
+    def bin_per_point_forecast(initial_state: np.array, point_count: np.array, price_increase: float, periods: int, people_per_bin: int = 45, scenario: int = 1):
 
         # for each period do this:
         ## get bin_count_response for given period and price increase
@@ -397,7 +448,7 @@ def _(
         previous_per_bin = 45
         for period in range(periods):
 
-            _factor = bin_count_response(price_increase, period, people_per_bin, previous_per_bin)
+            _factor = bin_count_response(price_increase, period, people_per_bin, previous_per_bin, scenario=scenario)
             new_state = initial_state * _factor 
             below_one = new_state < 1
 
@@ -423,7 +474,7 @@ def _(
         return bin_count_history, new_state
 
 
-    def stepped_coop():
+    def stepped_coop(scenario: int = 1):
 
         old_fees = coop_old_fees.copy() 
         baseline_points = coop_old_points.copy() 
@@ -433,11 +484,11 @@ def _(
         price_hike = 0.
 
         for step in coop_setup_editor.value.iterrows():
-        
+
             step_values = step[1]
             price_hike = price_hike + (step_values['Fee Hike'] / 100.)
             _new_fees = old_fees * (1 + price_hike)
-            _evolution, _latest_ratio = bin_per_point_forecast(baseline_ratio, baseline_points, price_hike, step_values['Year Gap']+1, step_values['Number of people per bin'])
+            _evolution, _latest_ratio = bin_per_point_forecast(baseline_ratio, baseline_points, price_hike, step_values['Year Gap']+1, step_values['Number of people per bin'], scenario=scenario)
             _fee_evolution = _evolution * _new_fees.T 
             if len(bin_evolution) == 0:
                 _fee_evolution[0] = _evolution[0] * old_fees.T
@@ -448,13 +499,12 @@ def _(
                 _evolution = _evolution[1:]
                 bin_evolution = np.concatenate([bin_evolution, _evolution])
                 fee_evolution = np.concatenate([fee_evolution, _fee_evolution])
-            
+
             baseline_bins = np.array([_evolution[-1]])
             baseline_points = (baseline_bins / _latest_ratio.T).T
             baseline_ratio = _latest_ratio
 
         return bin_evolution, fee_evolution
-
     return bin_per_point_forecast, stepped_coop
 
 
@@ -483,7 +533,7 @@ def _(mo):
 
 @app.cell
 def _(np):
-    def matrix_model_individual(price_increase: float = 0.3, base_scale: float = 2.0, year: int = 1, remove_weekly: bool = False):
+    def matrix_model_individual(price_increase: float = 0.3, base_scale: float = 2.0, year: int = 1, remove_weekly: bool = False, scenario: int = 1):
 
         """
         the matrix is:
@@ -493,6 +543,18 @@ def _(np):
         240l capacity, 2x month
         240l capacity, 4x month
         """
+
+        if scenario == 3:
+            if not remove_weekly:
+                return np.identity(5)
+
+            _matrix = np.identity(5)
+            _matrix[2,:] = _matrix[3,:]
+            _matrix[4,:] = _matrix[3,:]
+            return _matrix
+
+        if scenario == 2:
+            base_scale = 1.5
 
         factor1 = price_increase / 2 
         factor2 = price_increase / 15
@@ -507,6 +569,9 @@ def _(np):
             monthly_unit = 0
             monthly_split = 0.2, 0.8
             big_monthly_split = [0.05, 0.15, 0, 0.8, 0]
+
+
+    
 
         matrix = [
             [1,0,0,0,0],
@@ -527,9 +592,10 @@ def _(matrix_model_individual, np):
         price_increase = kwargs.get('price_increase',0.3)
         base_scale = kwargs.get('base_scale',2)
         remove_weekly = kwargs.get('remove_weekly', False)
+        scenario = kwargs.get('scenario', 1)
 
         if current_year < years:
-            matrix = matrix_model_individual(price_increase, base_scale, current_year+1, remove_weekly)
+            matrix = matrix_model_individual(price_increase, base_scale, current_year+1, remove_weekly, scenario=scenario)
             step = np.matmul(matrix.T, np.array([initial_state[-1]]).T)
             history = np.concatenate([initial_state, step.T])
             return run_individual(history, years, current_year+1, **kwargs)
