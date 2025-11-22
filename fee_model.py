@@ -76,7 +76,6 @@ def _(mo, pd):
         ind_setup_editor
 
     ])
-
     return fee_hike, forecast_periods, ind_setup_editor, remove_weekly
 
 
@@ -134,6 +133,21 @@ def _(mo):
                                       )
     scenario_selector
     return (scenario_selector,)
+
+
+@app.cell
+def _(alt, mo, results_overview):
+    results_together = results_overview()
+
+    total_simple = mo.ui.altair_chart(alt.Chart(results_together.query('Model == "Simple model"')).mark_trail().encode(x='Period', y="Fee_forecast", color='Scenario'), label="Total fee forecast per behavioral scenario (Simple)")
+    total_stepped = mo.ui.altair_chart(alt.Chart(results_together.query('Model == "Stepped model"')).mark_trail().encode(x='Period', y="Fee_forecast", color='Scenario'), label="Total fee forecast per behavioral scenario (Stepped)")
+
+    mo.vstack([
+        mo.md('## Total results for all behavioral scenarios'),
+        total_simple,
+        total_stepped
+    ])
+    return
 
 
 @app.cell(hide_code=True)
@@ -232,7 +246,7 @@ def _(fee_data):
 
 
 @app.cell
-def _(fee_data, fee_hike_coop):
+def _(fee_data):
     # get baseline for coops and businesses homes
     coop_sample = fee_data.query('Payer != "Individual"')
     coop_baseline = coop_sample.query('Year == 2025').groupby(['IntervalPerWeek'], as_index=False)[['CollectionPoints','BinCount','TotalFee','TotalVolume']].sum()
@@ -243,57 +257,60 @@ def _(fee_data, fee_hike_coop):
     coop_old_bin_ratio = coop_baseline[['BinPerPoint']].values
     coop_old_points = coop_baseline[['CollectionPoints']].values
 
-    coop_fee_hike_pct = fee_hike_coop.value/100. 
-    coop_new_fees = coop_old_fees * (1 + coop_fee_hike_pct)
-    return (
-        coop_fee_hike_pct,
-        coop_new_fees,
-        coop_old_bin_ratio,
-        coop_old_fees,
-        coop_old_points,
-    )
+    return coop_old_bin_ratio, coop_old_fees, coop_old_points
 
 
 @app.cell
 def _(
     SCENARIO,
     bin_per_point_forecast,
-    coop_fee_hike_pct,
-    coop_new_fees,
     coop_old_bin_ratio,
     coop_old_fees,
     coop_old_points,
+    fee_hike_coop,
     forecast_periods_coop,
     np,
     pd,
     persons_per_bin_coop,
 ):
-    simple_coop_forecast_bins, latest_sample = bin_per_point_forecast(coop_old_bin_ratio, coop_old_points, coop_fee_hike_pct, forecast_periods_coop.value, people_per_bin=persons_per_bin_coop.value, scenario=SCENARIO)
-    simple_coop_forecast_fees = simple_coop_forecast_bins * coop_new_fees.T
-    simple_coop_forecast_fees[0] = simple_coop_forecast_bins[0] * coop_old_fees.T 
-    simple_coop_forecast_fees
+    def coop_result_simple(initial_state: np.array, initial_fees: np.array, point_count: np.array, price_increase: float, periods: int, people_per_bin: int = 45, scenario: int = 1):
 
-    coop_results = pd.DataFrame({'Coop fees': simple_coop_forecast_fees.sum(axis=1),
+        # define values
+        coop_fee_hike_pct = price_increase/100.0
+        coop_new_fees = initial_fees * (1 + coop_fee_hike_pct)
+        
+        simple_coop_forecast_bins, latest_sample = bin_per_point_forecast(initial_state, point_count, coop_fee_hike_pct, periods, people_per_bin=people_per_bin, scenario=scenario)
+        simple_coop_forecast_fees = simple_coop_forecast_bins * coop_new_fees.T
+        simple_coop_forecast_fees[0] = simple_coop_forecast_bins[0] * initial_fees.T 
+
+        results = pd.DataFrame({'Coop fees': simple_coop_forecast_fees.sum(axis=1),
                                'Coop bin count': simple_coop_forecast_bins.sum(axis=1),
-                               'Period': np.arange(forecast_periods_coop.value),
+                               'Period': np.arange(periods),
                                 'Scenario': 'Simple model'})
-    return (coop_results,)
+        return results 
+
+    coop_results = coop_result_simple(coop_old_bin_ratio, coop_old_fees, coop_old_points, fee_hike_coop.value, forecast_periods_coop.value, people_per_bin=persons_per_bin_coop.value, scenario=SCENARIO)
+    return coop_result_simple, coop_results
 
 
 @app.cell
 def _(SCENARIO, coop_results, np, pd, stepped_coop):
-    stepped_coop_bins, stepped_coop_fees = stepped_coop(SCENARIO)
-    stepped_coop_bins_total = stepped_coop_bins.sum(axis=1)
-    stepped_coop_fees_total = stepped_coop_fees.sum(axis=1)
+    def coop_result_stepped(scenario: int = 1):
+    
+        stepped_coop_bins, stepped_coop_fees = stepped_coop(scenario)
+        stepped_coop_bins_total = stepped_coop_bins.sum(axis=1)
+        stepped_coop_fees_total = stepped_coop_fees.sum(axis=1)
+    
+        return pd.DataFrame(
+            {'Coop fees': stepped_coop_fees_total,
+             'Coop bin count': stepped_coop_bins_total,
+             'Period': np.arange(len(stepped_coop_fees_total)),
+             'Scenario': 'Stepped model'})
 
-    coop_results2 = pd.DataFrame(
-        {'Coop fees': stepped_coop_fees_total,
-         'Coop bin count': stepped_coop_bins_total,
-         'Period': np.arange(len(stepped_coop_fees_total)),
-         'Scenario': 'Stepped model'})
+    coop_results2 = coop_result_stepped(SCENARIO)
 
     coop_results_ = pd.concat([coop_results, coop_results2], ignore_index=True)
-    return (coop_results_,)
+    return coop_result_stepped, coop_results_
 
 
 @app.cell
@@ -306,38 +323,37 @@ def _(fee_data):
 
 
 @app.cell
-def _(fee_hike, ind_baseline):
+def _(ind_baseline):
     # get baseline for bins and fees for homes
-    ind_fee_hike_pct = fee_hike.value/100.
     ind_old_fees = ind_baseline[['FeePerBin']].values 
     ind_baseline_bins = ind_baseline[['BinCount']].values.T
-    ind_new_fees = ind_old_fees * (1. + ind_fee_hike_pct)
-    return ind_baseline_bins, ind_fee_hike_pct, ind_new_fees, ind_old_fees
+    return ind_baseline_bins, ind_old_fees
 
 
 @app.cell
-def _(
-    SCENARIO,
-    forecast_periods,
-    ind_baseline_bins,
-    ind_fee_hike_pct,
-    ind_new_fees,
-    ind_old_fees,
-    remove_weekly,
-    run_individual,
-):
+def _(ind_old_fees, np, pd, run_individual):
     # forecast individual homes
-    ind_bin_evolution = run_individual(ind_baseline_bins, forecast_periods.value, 0, price_increase=ind_fee_hike_pct, remove_weekly=remove_weekly.value, scenario=SCENARIO)
-    ind_fee_evolution = ind_bin_evolution * ind_new_fees.T
-    ind_fee_evolution[0] = ind_bin_evolution[0] * ind_old_fees.T # first year keeps old fees
-    return ind_bin_evolution, ind_fee_evolution
+    def ind_results_simple(initial_state: np.array, initial_fees: np.array, periods: int, price_increase: float, remove_weekly: bool, scenario: int):
 
+        # define values
+        ind_fee_hike_pct = price_increase/100.0
+        ind_new_fees = ind_old_fees * (1. + ind_fee_hike_pct)
 
-@app.cell
-def _(ind_bin_evolution, ind_fee_evolution):
-    ind_fee_evolution_total = ind_fee_evolution.sum(axis=1)
-    ind_bin_evolution_total = ind_bin_evolution.sum(axis=1)
-    return ind_bin_evolution_total, ind_fee_evolution_total
+        # compute 
+        ind_bin_evolution = run_individual(initial_state, periods, 0, price_increase=ind_fee_hike_pct, remove_weekly=remove_weekly, scenario=scenario)
+        ind_fee_evolution = ind_bin_evolution * ind_new_fees.T
+        ind_fee_evolution[0] = ind_bin_evolution[0] * initial_fees.T # first year keeps old fees
+
+        ind_fee_evolution_total = ind_fee_evolution.sum(axis=1)
+        ind_bin_evolution_total = ind_bin_evolution.sum(axis=1)
+
+        return pd.DataFrame(
+        {'Individual payers fees': ind_fee_evolution_total,
+         'Individual bin count': ind_bin_evolution_total,
+         'Period': np.arange(periods),
+         'Scenario': 'Simple model'})
+
+    return (ind_results_simple,)
 
 
 @app.cell
@@ -347,6 +363,7 @@ def _(
     ind_old_fees,
     ind_setup_editor,
     np,
+    pd,
     run_individual,
 ):
     def stepped_individual(scenario:int = 1):
@@ -376,36 +393,140 @@ def _(
 
         return bin_evolution, fee_evolution
 
-    stepped_ind_bins, stepped_ind_fees = stepped_individual(SCENARIO)
-    stepped_ind_bins_total = stepped_ind_bins.sum(axis=1)
-    stepped_ind_fees_total = stepped_ind_fees.sum(axis=1)
-    return stepped_ind_bins_total, stepped_ind_fees_total
+    def ind_results_stepped(scenario: int): 
+    
+        stepped_ind_bins, stepped_ind_fees = stepped_individual(SCENARIO)
+        stepped_ind_bins_total = stepped_ind_bins.sum(axis=1)
+        stepped_ind_fees_total = stepped_ind_fees.sum(axis=1)
 
-
-@app.cell
-def _(
-    forecast_periods,
-    ind_bin_evolution_total,
-    ind_fee_evolution_total,
-    np,
-    pd,
-    stepped_ind_bins_total,
-    stepped_ind_fees_total,
-):
-    _ind_df_results = pd.DataFrame(
-        {'Individual payers fees': ind_fee_evolution_total,
-         'Individual bin count': ind_bin_evolution_total,
-         'Period': np.arange(forecast_periods.value+1),
-         'Scenario': 'Simple model'})
-
-    _ind_df_results2 = pd.DataFrame(
+        return pd.DataFrame(
         {'Individual payers fees': stepped_ind_fees_total,
          'Individual bin count': stepped_ind_bins_total,
          'Period': np.arange(len(stepped_ind_fees_total)),
          'Scenario': 'Stepped model'})
+    return (ind_results_stepped,)
+
+
+@app.cell
+def _(
+    SCENARIO,
+    fee_hike,
+    forecast_periods,
+    ind_baseline_bins,
+    ind_old_fees,
+    ind_results_simple,
+    ind_results_stepped,
+    pd,
+    remove_weekly,
+):
+    _ind_df_results = ind_results_simple(ind_baseline_bins, ind_old_fees, forecast_periods.value, fee_hike.value, remove_weekly.value, SCENARIO)
+    _ind_df_results2 = ind_results_stepped(SCENARIO)
 
     ind_df_results = pd.concat([_ind_df_results, _ind_df_results2])
     return (ind_df_results,)
+
+
+@app.cell
+def _(
+    coop_old_bin_ratio,
+    coop_old_fees,
+    coop_old_points,
+    coop_result_simple,
+    coop_result_stepped,
+    fee_hike,
+    fee_hike_coop,
+    forecast_periods,
+    forecast_periods_coop,
+    ind_baseline_bins,
+    ind_old_fees,
+    ind_results_simple,
+    ind_results_stepped,
+    pd,
+    persons_per_bin_coop,
+    remove_weekly,
+):
+    def equalize_frames(longer_frame: pd.DataFrame, shorter_frame: pd.DataFrame, col_name: str = 'Period'):
+        minmax = shorter_frame.Period.max()
+        delta = longer_frame.Period.max() - minmax
+        last_row = shorter_frame.query(f'{col_name} == @minmax').copy()
+        for step in range(1, delta+1):
+            last_row[col_name] = minmax + step 
+            shorter_frame = pd.concat([shorter_frame, last_row])
+
+        return shorter_frame
+    
+    def results_overview():
+
+        """
+        We are going to generate results for all behavioral scenarios 
+        for both individual and coop results. 
+
+        Then we aggregate ind + coop for each scenario and each model option (simple/stepped) per period.
+
+        helpers
+    
+        coop_result_simple(coop_old_bin_ratio, coop_old_fees, coop_old_points, fee_hike_coop.value, forecast_periods_coop.value, people_per_bin=persons_per_bin_coop.value, scenario=SCENARIO)
+
+        coop_result_stepped(SCENARIO)
+
+        ind_results_simple(ind_baseline_bins, ind_old_fees, forecast_periods.value, fee_hike.value, remove_weekly.value, SCENARIO)
+
+        ind_results_stepped(SCENARIO)
+        """
+
+        simple_results = []
+        stepped_results = []
+        COLS = ['Fee_forecast','Bin_forecast','Period','Model']
+        scenarios = {
+            1: '1 Baseline',
+            2: '2 Austerity',
+            3: '3 Business as usual'
+        }
+
+        for scenario in [1,2,3]:
+
+            coop_simple = coop_result_simple(coop_old_bin_ratio, coop_old_fees, coop_old_points, fee_hike_coop.value, 
+                                            forecast_periods_coop.value, people_per_bin=persons_per_bin_coop.value, scenario=scenario)
+            coop_simple.columns = COLS
+
+            coop_stepped = coop_result_stepped(scenario)
+            coop_stepped.columns = COLS
+
+            ind_simple = ind_results_simple(ind_baseline_bins, ind_old_fees, forecast_periods.value, fee_hike.value, remove_weekly.value, scenario)
+            ind_simple.columns = COLS
+
+            ind_stepped = ind_results_stepped(scenario)
+            ind_stepped.columns = COLS
+
+            # check need to extend forecast in one or other result
+            if ind_simple.shape[0] > coop_simple.shape[0]:
+                coop_simple = equalize_frames(ind_simple, coop_simple)
+            elif ind_simple.shape[0] < coop_simple.shape[0]:
+                ind_simple = equalize_frames(coop_simple, ind_simple)
+
+            # check need to extend forecast in one or other result
+            if ind_stepped.shape[0] > coop_stepped.shape[0]:
+                coop_stepped = equalize_frames(ind_stepped, coop_stepped)
+            elif ind_stepped.shape[0] < coop_stepped.shape[0]:
+                ind_stepped = equalize_frames(coop_stepped, ind_stepped)
+                
+            simple = pd.concat([coop_simple, ind_simple], ignore_index=True)
+            simple = simple.groupby(['Model','Period'], as_index=False)[['Fee_forecast','Bin_forecast']].sum()
+            simple['Scenario'] = scenarios[scenario]
+            simple_results.append(simple)
+
+            stepped = pd.concat([coop_stepped, ind_stepped], ignore_index=True)
+            stepped = stepped.groupby(['Model','Period'], as_index=False)[['Fee_forecast','Bin_forecast']].sum()
+            stepped['Scenario'] = scenarios[scenario]
+            stepped_results.append(stepped)
+
+        together = pd.concat(simple_results+stepped_results, ignore_index=True)
+
+        return together
+
+
+        
+    return (results_overview,)
 
 
 @app.cell
@@ -571,7 +692,7 @@ def _(np):
             big_monthly_split = [0.05, 0.15, 0, 0.8, 0]
 
 
-    
+
 
         matrix = [
             [1,0,0,0,0],
@@ -594,7 +715,7 @@ def _(matrix_model_individual, np):
         remove_weekly = kwargs.get('remove_weekly', False)
         scenario = kwargs.get('scenario', 1)
 
-        if current_year < years:
+        if current_year < years-1:
             matrix = matrix_model_individual(price_increase, base_scale, current_year+1, remove_weekly, scenario=scenario)
             step = np.matmul(matrix.T, np.array([initial_state[-1]]).T)
             history = np.concatenate([initial_state, step.T])
