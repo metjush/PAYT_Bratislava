@@ -139,21 +139,15 @@ def _(mo):
 def _(alt, mo, results_overview):
     results_together, detailed_results_together = results_overview()
 
-    detailed_results_together.to_excel('public/detailed_results_together.xlsx', index=False)
-
     total_simple = mo.ui.altair_chart(alt.Chart(results_together.query('Model == "Simple model"')).mark_trail().encode(x='Period', y="Fee_forecast", color='Scenario'), label="Total fee forecast per behavioral scenario (Simple)")
     total_stepped = mo.ui.altair_chart(alt.Chart(results_together.query('Model == "Stepped model"')).mark_trail().encode(x='Period', y="Fee_forecast", color='Scenario'), label="Total fee forecast per behavioral scenario (Stepped)")
 
-    with open('public/detailed_results_together.xlsx', 'rb') as excel_export:
-        download_button = mo.download(data=excel_export, 
-                                      filename='detailed_results_together.xlsx', 
-                                      label = 'Download detailed total results as Excel')
-    
     mo.vstack([
         mo.md('## Total results for all behavioral scenarios'),
-        download_button,
         total_simple,
-        total_stepped
+        total_stepped,
+        mo.md('### Detailed results in a table: '),
+        detailed_results_together[['Scenario','Model','Period','Fee_forecast','Bin_forecast']]
     ])
     return
 
