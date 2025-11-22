@@ -137,13 +137,21 @@ def _(mo):
 
 @app.cell
 def _(alt, mo, results_overview):
-    results_together = results_overview()
+    results_together, detailed_results_together = results_overview()
+
+    detailed_results_together.to_excel('public/detailed_results_together.xlsx', index=False)
 
     total_simple = mo.ui.altair_chart(alt.Chart(results_together.query('Model == "Simple model"')).mark_trail().encode(x='Period', y="Fee_forecast", color='Scenario'), label="Total fee forecast per behavioral scenario (Simple)")
     total_stepped = mo.ui.altair_chart(alt.Chart(results_together.query('Model == "Stepped model"')).mark_trail().encode(x='Period', y="Fee_forecast", color='Scenario'), label="Total fee forecast per behavioral scenario (Stepped)")
 
+    with open('public/detailed_results_together.xlsx', 'rb') as excel_export:
+        download_button = mo.download(data=excel_export, 
+                                      filename='detailed_results_together.xlsx', 
+                                      label = 'Download detailed total results as Excel')
+    
     mo.vstack([
         mo.md('## Total results for all behavioral scenarios'),
+        download_button,
         total_simple,
         total_stepped
     ])
@@ -473,7 +481,8 @@ def _(
 
         ind_results_stepped(SCENARIO)
         """
-
+        simple_detail = []
+        stepped_detail = []
         simple_results = []
         stepped_results = []
         COLS = ['Fee_forecast','Bin_forecast','Period','Model']
@@ -511,18 +520,21 @@ def _(
                 ind_stepped = equalize_frames(coop_stepped, ind_stepped)
                 
             simple = pd.concat([coop_simple, ind_simple], ignore_index=True)
-            simple = simple.groupby(['Model','Period'], as_index=False)[['Fee_forecast','Bin_forecast']].sum()
             simple['Scenario'] = scenarios[scenario]
-            simple_results.append(simple)
+            simple_detail.append(simple)
+            simple_group = simple.groupby(['Scenario','Model','Period'], as_index=False)[['Fee_forecast','Bin_forecast']].sum()
+            simple_results.append(simple_group)
 
             stepped = pd.concat([coop_stepped, ind_stepped], ignore_index=True)
-            stepped = stepped.groupby(['Model','Period'], as_index=False)[['Fee_forecast','Bin_forecast']].sum()
             stepped['Scenario'] = scenarios[scenario]
-            stepped_results.append(stepped)
+            stepped_detail.append(stepped)
+            stepped_group = stepped.groupby(['Scenario','Model','Period'], as_index=False)[['Fee_forecast','Bin_forecast']].sum()
+            stepped_results.append(stepped_group)
 
         together = pd.concat(simple_results+stepped_results, ignore_index=True)
+        together_detail = pd.concat(simple_detail+stepped_detail, ignore_index=True)
 
-        return together
+        return together, together_detail
 
 
         
