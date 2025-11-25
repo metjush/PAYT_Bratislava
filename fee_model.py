@@ -30,7 +30,34 @@ def _():
 @app.cell
 def _(mo, pd):
     fee_data = pd.read_excel(str(mo.notebook_location() / 'public' / 'fee_data.xlsx'))
-    return (fee_data,)
+    olo_data = pd.read_excel(str(mo.notebook_location() / 'public' / 'olo_exp.xlsx'))
+    return fee_data, olo_data
+
+
+@app.cell
+def _(np, olo_data, pd):
+    # clean OLO data
+    transposed_olo = olo_data.T
+    transposed_olo.columns = transposed_olo.iloc[0]
+    OLO = transposed_olo.drop(transposed_olo.index[0]).reset_index()[['index','NakladyOLO']].rename(columns={'index':'year', 'NakladyOLO':'OLO'})
+
+    # extend expenses further
+    _olo_years = OLO['year'].count() - 1
+    _olo_min = OLO['OLO'].values[0]
+    _olo_max = OLO['OLO'].values[-1]
+    olo_rate_of_growth = np.power((_olo_max / _olo_min), 1/_olo_years)
+    _last_year = OLO['year'].max()
+    end_of_forecast = 2041
+    for y in range(_last_year + 1, end_of_forecast):
+        _new_row = {
+            'year': y, 
+            'OLO': _olo_max * (olo_rate_of_growth ** (y - _last_year))
+        }
+        OLO = pd.concat([OLO, pd.DataFrame(_new_row, index=[0])], ignore_index=True)
+
+
+    OLO['Period'] = OLO['year'] - 2025
+    return
 
 
 @app.cell(hide_code=True)
@@ -56,6 +83,45 @@ def _(mo):
 
 
 @app.cell(hide_code=True)
+def _(mo):
+    # parametrize rate of growth for fees BAU, waste collection yards...
+
+    global_fee_growth = mo.ui.slider(0, 10, 0.1, include_input=True, show_value=True, value=1.5)
+    yard_takeover = mo.ui.checkbox(value=False)
+    average_bin_fullness = mo.ui.slider(0,100,show_value=True, include_input=True, value=53)
+    scenario_selector = mo.ui.dropdown(options = {'1 Baseline': 1, '2 Austerity': 2, '3 Business as usual': 3},
+                                       allow_select_none=False,
+                                       searchable=True, 
+                                       value='1 Baseline'
+                                      )
+
+    mo.vstack([
+        mo.md('## Parameter setup'),
+        mo.md('### General assumptions and policy changes'),
+        mo.hstack([
+            mo.vstack([
+                mo.md('**Annual rate of growth for fee collection (new construction, etc.) in %**'),
+                global_fee_growth
+            ]),
+            mo.vstack([
+                mo.md('**Make OLO handle waste collection from local waste collection yards**'), 
+                yard_takeover
+            ])]),
+        mo.hstack([
+            mo.vstack([
+                mo.md('**Share of individual bins that are filled to capacity in %**'), 
+                average_bin_fullness
+            ]),
+            mo.vstack([
+                mo.md('**Behavioral scenario**'),
+                scenario_selector
+            ])
+        ])
+    ])
+    return average_bin_fullness, global_fee_growth, scenario_selector
+
+
+@app.cell(hide_code=True)
 def _(mo, pd):
     fee_hike = mo.ui.slider(0,100, show_value=True, include_input=True, value=30)
     remove_weekly = mo.ui.checkbox()
@@ -66,7 +132,6 @@ def _(mo, pd):
 
 
     mo.vstack([
-        mo.md('## Parameter setup'),
         mo.md('### Individual homes (simple setup)'),
         mo.hstack([mo.md('**1 Increase in standard fee in %**'), fee_hike], align='center'),
         mo.hstack([mo.md('**2 Disable once per week frequency option for individual homes**'), remove_weekly],  align='center'),
@@ -121,18 +186,6 @@ def _(mo):
     """
     )
     return
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    scenario_selector = mo.ui.dropdown(options = {'1 Baseline': 1, '2 Austerity': 2, '3 Business as usual': 3},
-                                       allow_select_none=False,
-                                       searchable=True, 
-                                       label="Select the behavioral scenario: ",
-                                       value='1 Baseline'
-                                      )
-    scenario_selector
-    return (scenario_selector,)
 
 
 @app.cell
@@ -263,6 +316,17 @@ def _(fee_data):
 
 
 @app.cell
+def _(global_fee_growth, np):
+    def indexer(periods: np.array):
+        rate_of_inc = global_fee_growth.value / 100 + 1
+        rate_array = np.full(shape=periods.shape, fill_value=rate_of_inc)
+        index_array = rate_array ** periods
+        return index_array
+
+    return (indexer,)
+
+
+@app.cell
 def _(
     SCENARIO,
     bin_per_point_forecast,
@@ -271,6 +335,7 @@ def _(
     coop_old_points,
     fee_hike_coop,
     forecast_periods_coop,
+    indexer,
     np,
     pd,
     persons_per_bin_coop,
@@ -285,9 +350,13 @@ def _(
         simple_coop_forecast_fees = simple_coop_forecast_bins * coop_new_fees.T
         simple_coop_forecast_fees[0] = simple_coop_forecast_bins[0] * initial_fees.T 
 
-        results = pd.DataFrame({'Coop fees': simple_coop_forecast_fees.sum(axis=1),
+        periods = np.arange(periods)
+        index_array = indexer(periods)
+        fees = simple_coop_forecast_fees.sum(axis=1) * index_array
+
+        results = pd.DataFrame({'Coop fees': fees,
                                'Coop bin count': simple_coop_forecast_bins.sum(axis=1),
-                               'Period': np.arange(periods),
+                               'Period': periods,
                                 'Scenario': 'Simple model'})
         return results 
 
@@ -296,17 +365,22 @@ def _(
 
 
 @app.cell
-def _(SCENARIO, coop_results, np, pd, stepped_coop):
+def _(SCENARIO, coop_results, indexer, np, pd, stepped_coop):
     def coop_result_stepped(scenario: int = 1):
     
         stepped_coop_bins, stepped_coop_fees = stepped_coop(scenario)
         stepped_coop_bins_total = stepped_coop_bins.sum(axis=1)
         stepped_coop_fees_total = stepped_coop_fees.sum(axis=1)
+
+        periods = np.arange(len(stepped_coop_fees_total))
+        index_array = indexer(periods)
+        stepped_coop_fees_total = stepped_coop_fees_total * index_array
+    
     
         return pd.DataFrame(
             {'Coop fees': stepped_coop_fees_total,
              'Coop bin count': stepped_coop_bins_total,
-             'Period': np.arange(len(stepped_coop_fees_total)),
+             'Period': periods,
              'Scenario': 'Stepped model'})
 
     coop_results2 = coop_result_stepped(SCENARIO)
@@ -333,7 +407,7 @@ def _(ind_baseline):
 
 
 @app.cell
-def _(ind_old_fees, np, pd, run_individual):
+def _(ind_old_fees, indexer, np, pd, run_individual):
     # forecast individual homes
     def ind_results_simple(initial_state: np.array, initial_fees: np.array, periods: int, price_increase: float, remove_weekly: bool, scenario: int):
 
@@ -349,10 +423,14 @@ def _(ind_old_fees, np, pd, run_individual):
         ind_fee_evolution_total = ind_fee_evolution.sum(axis=1)
         ind_bin_evolution_total = ind_bin_evolution.sum(axis=1)
 
+        periods = np.arange(periods)
+        index_array = indexer(periods)
+        ind_fee_evolution_total = ind_fee_evolution_total * index_array
+
         return pd.DataFrame(
         {'Individual payers fees': ind_fee_evolution_total,
          'Individual bin count': ind_bin_evolution_total,
-         'Period': np.arange(periods),
+         'Period': periods,
          'Scenario': 'Simple model'})
 
     return (ind_results_simple,)
@@ -364,6 +442,7 @@ def _(
     ind_baseline_bins,
     ind_old_fees,
     ind_setup_editor,
+    indexer,
     np,
     pd,
     run_individual,
@@ -380,7 +459,7 @@ def _(
             step_values = step[1]
             price_hike = price_hike + (step_values['Fee Hike'] / 100.)
             _new_fees = old_fees * (1 + price_hike)
-            _evolution = run_individual(baseline_bins, step_values['Year Gap'], 0, price_increase = price_hike, remove_weekly = step_values['Disable Weekly Option'], scenario = scenario)
+            _evolution = run_individual(baseline_bins, step_values['Year Gap']+1, 0, price_increase = price_hike, remove_weekly = step_values['Disable Weekly Option'], scenario = scenario)
             _fee_evolution = _evolution * _new_fees.T 
             if len(bin_evolution) == 0:
                 _fee_evolution[0] = _evolution[0] * old_fees.T
@@ -401,10 +480,14 @@ def _(
         stepped_ind_bins_total = stepped_ind_bins.sum(axis=1)
         stepped_ind_fees_total = stepped_ind_fees.sum(axis=1)
 
+        periods = np.arange(len(stepped_ind_fees_total))
+        index_array = indexer(periods)
+        stepped_ind_fees_total = stepped_ind_fees_total * index_array
+
         return pd.DataFrame(
         {'Individual payers fees': stepped_ind_fees_total,
          'Individual bin count': stepped_ind_bins_total,
-         'Period': np.arange(len(stepped_ind_fees_total)),
+         'Period': periods,
          'Scenario': 'Stepped model'})
     return (ind_results_stepped,)
 
@@ -553,7 +636,7 @@ def _(
 
         per_bin_factor = 1
         if previous_per_bin < people_per_bin:
-            per_bin_factor = 1 - (np.log10(people_per_bin - 44) / (scale * 1.5))
+            per_bin_factor = 1 - (np.log10(people_per_bin - 44) / (scale * 3.5))
 
         return (1 - (price_increase / (scale ** period)))*per_bin_factor
 
@@ -659,7 +742,7 @@ def _(mo):
 
 
 @app.cell
-def _(np):
+def _(average_bin_fullness, np):
     def matrix_model_individual(price_increase: float = 0.3, base_scale: float = 2.0, year: int = 1, remove_weekly: bool = False, scenario: int = 1):
 
         """
@@ -690,11 +773,12 @@ def _(np):
         unit = lambda factor, year: factor / (base_scale ** year)
 
         monthly_unit = 1 - unit(factor1, year)
-        monthly_split = unit(factor_split[0], year), unit(factor_split[1], year)
+        monthly_split = [unit(factor_split[0], year), unit(factor_split[1], year), monthly_unit, 0 , 0]
         big_monthly_split = [0, 0, monthly_split[0], monthly_split[1], monthly_unit]
         if remove_weekly:
             monthly_unit = 0
-            monthly_split = 0.2, 0.8
+            full_share = average_bin_fullness.value / 100
+            monthly_split = [0.2*(1-full_share), 0.8*(1-full_share), 0, full_share, 0]
             big_monthly_split = [0.05, 0.15, 0, 0.8, 0]
 
 
@@ -703,7 +787,7 @@ def _(np):
         matrix = [
             [1,0,0,0,0],
             [unit(factor2, year), 1-unit(factor2, year), 0, 0, 0],
-            [monthly_split[0], monthly_split[1], monthly_unit, 0, 0],
+            monthly_split,
             [0, unit(factor2, year), 0, 1-unit(factor2, year), 0],
             big_monthly_split
         ]
