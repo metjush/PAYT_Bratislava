@@ -31,7 +31,8 @@ def _():
 def _(mo, pd):
     fee_data = pd.read_excel(str(mo.notebook_location() / 'public' / 'fee_data.xlsx'))
     olo_data = pd.read_excel(str(mo.notebook_location() / 'public' / 'olo_exp.xlsx'))
-    return fee_data, olo_data
+    yard_data = pd.read_excel(str(mo.notebook_location() / 'public' / 'yards.xlsx'))
+    return fee_data, olo_data, yard_data
 
 
 @app.cell
@@ -39,25 +40,43 @@ def _(np, olo_data, pd):
     # clean OLO data
     transposed_olo = olo_data.T
     transposed_olo.columns = transposed_olo.iloc[0]
-    OLO = transposed_olo.drop(transposed_olo.index[0]).reset_index()[['index','NakladyOLO']].rename(columns={'index':'year', 'NakladyOLO':'OLO'})
+    OLO = transposed_olo.drop(transposed_olo.index[0]).reset_index()[['index','NakladyOLO']].rename(columns={'index':'year', 'NakladyOLO':'1 OLO'})
 
     # extend expenses further
     _olo_years = OLO['year'].count() - 1
-    _olo_min = OLO['OLO'].values[0]
-    _olo_max = OLO['OLO'].values[-1]
+    _olo_min = OLO['1 OLO'].values[0]
+    _olo_max = OLO['1 OLO'].values[-1]
     olo_rate_of_growth = np.power((_olo_max / _olo_min), 1/_olo_years)
     _last_year = OLO['year'].max()
     end_of_forecast = 2041
     for y in range(_last_year + 1, end_of_forecast):
         _new_row = {
             'year': y, 
-            'OLO': _olo_max * (olo_rate_of_growth ** (y - _last_year))
+            '1 OLO': _olo_max * (olo_rate_of_growth ** (y - _last_year))
         }
         OLO = pd.concat([OLO, pd.DataFrame(_new_row, index=[0])], ignore_index=True)
 
 
     OLO['Period'] = OLO['year'] - 2025
-    return
+    return OLO, end_of_forecast, olo_rate_of_growth
+
+
+@app.cell
+def _(end_of_forecast, olo_rate_of_growth, pd, yard_data):
+    yard_data['year'] = 2024
+    yard_pivot = yard_data.pivot(columns=['Mestska_cast'],index=['year'],values=['Naklady_zhodnotenie'])
+    yard_total = yard_pivot.sum(axis=1).reset_index()
+    yard_total.columns = ['year','yard_cost']
+    _cost = yard_total.yard_cost.values[0]
+    for _y in range(2025, end_of_forecast):
+        _new_row = {
+            'year': _y, 
+            'yard_cost': _cost * (olo_rate_of_growth ** (_y - 2024))
+        }
+        yard_total = pd.concat([yard_total, pd.DataFrame(_new_row, index=[0])], ignore_index=True)
+
+    yard_total['Period'] = yard_total['year'] - 2025
+    return (yard_total,)
 
 
 @app.cell(hide_code=True)
@@ -69,10 +88,20 @@ def _(mo):
     In this notebook we can simulate impacts of waste collection reforms on tax revenue and expenditures of OLO. 
     We will adjust different parameters to show the expected evolution of key indicators in various scenarios. Since we have little available past data on how people in Bratislava respond to changes in waste collection, we need to model different scenarios to show a potential range of outcomes. 
 
+    There are general assumptions you can setup: 
+
+    1. Annual rate of growth for fee collection. Default is `1.5%` per year. This represents new construction and more people moving in to the city.
+    2. Share of individual bins that are filled to capacity. Default is `53%`. This reflects latest results from a study of individual homes. This impacts how many people move to larger bins.
+    3. Assumption for how much more expensive OLO is compared to local yards. Default is `1.5x`. This reflects that when local districts handle waste, they usually choose cheaper options.
+    4. Whether OLO should take over local waste collection yards. If yes, the collection costs are added to costs of OLO.
+    5. Behavioral scenario (see below). Total results show results for all scenarios.
+    6. Baseline value for other expenses covered by the waste fees. 
+
     Here you can set up the simulation: 
 
     1. Increase in fees (in %)
     2. Removing / adding options of collection schedules
+    3. Number of people per large 1,100L bin
 
     The simulation is parametrized differently for individual homes and differently for businesses/coops. This is because the assumption is that these groups respond differently to fee increases. While individual home owners can respond by frequency changes only (usually only have on bin), coops and businesses mostly adjust the number of bins, and only if this is not an option do they drop frequencies. 
 
@@ -95,6 +124,9 @@ def _(mo):
                                        value='1 Baseline'
                                       )
 
+    other_cost_baseline = mo.ui.number(start=0, value=1070384)
+    olo_multiplier = mo.ui.slider(0,10,0.1, include_input=True, show_value=True, value=1.5)
+
     mo.vstack([
         mo.md('## Parameter setup'),
         mo.md('### General assumptions and policy changes'),
@@ -116,9 +148,26 @@ def _(mo):
                 mo.md('**Behavioral scenario**'),
                 scenario_selector
             ])
+        ]),
+        mo.hstack([
+            mo.vstack([
+                mo.md('**Assumption for how much more expensive OLO is compared to local yards (multiplier)**'),
+                olo_multiplier
+            ]),
+            mo.vstack([
+                mo.md('**2024 value for other expenses covered by waste fees**'), 
+                other_cost_baseline
+            ])
         ])
     ])
-    return average_bin_fullness, global_fee_growth, scenario_selector
+    return (
+        average_bin_fullness,
+        global_fee_growth,
+        olo_multiplier,
+        other_cost_baseline,
+        scenario_selector,
+        yard_takeover,
+    )
 
 
 @app.cell(hide_code=True)
@@ -188,19 +237,30 @@ def _(mo):
     return
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(alt, mo, results_overview):
     results_together, detailed_results_together = results_overview()
 
-    total_simple = mo.ui.altair_chart(alt.Chart(results_together.query('Model == "Simple model"')).mark_trail().encode(x='Period', y="Fee_forecast", color='Scenario'), label="Total fee forecast per behavioral scenario (Simple)")
-    total_stepped = mo.ui.altair_chart(alt.Chart(results_together.query('Model == "Stepped model"')).mark_trail().encode(x='Period', y="Fee_forecast", color='Scenario'), label="Total fee forecast per behavioral scenario (Stepped)")
+    def summary_chart(model, result_df):
+
+        _df = result_df.query('Model == @model')[['Period','Fee_forecast','Scenario']].copy()
+        _exp_df = result_df.query('Model == @model and Scenario == "1 Baseline"').drop(columns=['Fee_forecast','Bin_forecast','Scenario'])
+        _melt_exp = _exp_df.melt(id_vars=['Period'], value_vars=['1 OLO', '2 Other Expenses', '3 MC Share', '4 OLO Yards'], var_name='Category',value_name='Expenses').sort_values(by=['Category'], ascending=True)
+    
+        lines_chart = alt.Chart(_df).mark_trail().encode(x='Period', y='Fee_forecast',color='Scenario')
+
+        bar_chart = alt.Chart(_melt_exp).mark_bar(size=25).encode(x='Period',y='Expenses',color='Category')
+
+        return lines_chart + bar_chart 
+    
+
+    total_simple = mo.ui.altair_chart(summary_chart('Simple model', results_together), label="Total fee forecast per behavioral scenario (Simple)")
+    total_stepped = mo.ui.altair_chart(summary_chart('Stepped model', results_together), label="Total fee forecast per behavioral scenario (Stepped)")
 
     mo.vstack([
         mo.md('## Total results for all behavioral scenarios'),
         total_simple,
-        total_stepped,
-        mo.md('### Detailed results in a table: '),
-        detailed_results_together[['Scenario','Model','Period','Fee_forecast','Bin_forecast']]
+        total_stepped
     ])
     return
 
@@ -513,6 +573,7 @@ def _(
 
 @app.cell
 def _(
+    OLO,
     coop_old_bin_ratio,
     coop_old_fees,
     coop_old_points,
@@ -526,9 +587,14 @@ def _(
     ind_old_fees,
     ind_results_simple,
     ind_results_stepped,
+    indexer,
+    olo_multiplier,
+    other_cost_baseline,
     pd,
     persons_per_bin_coop,
     remove_weekly,
+    yard_takeover,
+    yard_total,
 ):
     def equalize_frames(longer_frame: pd.DataFrame, shorter_frame: pd.DataFrame, col_name: str = 'Period'):
         minmax = shorter_frame.Period.max()
@@ -539,6 +605,25 @@ def _(
             shorter_frame = pd.concat([shorter_frame, last_row])
 
         return shorter_frame
+
+    def build_expenses():
+
+        expenses = OLO.copy()
+
+        expenses['4 OLO Yards'] = 0.
+
+        if yard_takeover.value:
+            expenses = expenses.merge(yard_total[['year','yard_cost']], on='year', how='left')
+            expenses['4 OLO Yards'] = expenses['yard_cost'] * olo_multiplier.value
+            expenses.drop(columns=['yard_cost'], inplace=True)
+
+        other_exp_base = other_cost_baseline.value 
+        periods = expenses['Period'].values 
+        index = indexer(periods)
+        other_exp = index * other_exp_base
+
+        expenses['2 Other Expenses'] = other_exp 
+        return expenses
     
     def results_overview():
 
@@ -610,6 +695,11 @@ def _(
 
         together = pd.concat(simple_results+stepped_results, ignore_index=True)
         together_detail = pd.concat(simple_detail+stepped_detail, ignore_index=True)
+
+        # merge OLO
+        expenses = build_expenses()
+        together = together.merge(expenses, on=['Period'], how='left')
+        together['3 MC Share'] = together.Fee_forecast * 0.1
 
         return together, together_detail
 
