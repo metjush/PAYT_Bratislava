@@ -40,25 +40,29 @@ def _(np, olo_data, pd):
     # clean OLO data
     transposed_olo = olo_data.T
     transposed_olo.columns = transposed_olo.iloc[0]
-    OLO = transposed_olo.drop(transposed_olo.index[0]).reset_index()[['index','NakladyOLO']].rename(columns={'index':'year', 'NakladyOLO':'1 OLO'})
+    OLO_base = transposed_olo.drop(transposed_olo.index[0]).reset_index()[['index','NakladyOLO']].rename(columns={'index':'year', 'NakladyOLO':'Cost of OLO'})
+
+    # VAT
+    VAT = 0.23
+    OLO_base['Cost of OLO'] = OLO_base['Cost of OLO'] * (1 + VAT)
 
     # extend expenses further
-    _olo_years = OLO['year'].count() - 1
-    _olo_min = OLO['1 OLO'].values[0]
-    _olo_max = OLO['1 OLO'].values[-1]
+    _olo_years = OLO_base['year'].count() - 1
+    _olo_min = OLO_base['Cost of OLO'].values[0]
+    _olo_max = OLO_base['Cost of OLO'].values[-1]
     olo_rate_of_growth = np.power((_olo_max / _olo_min), 1/_olo_years)
-    _last_year = OLO['year'].max()
+    _last_year = OLO_base['year'].max()
     end_of_forecast = 2041
     for y in range(_last_year + 1, end_of_forecast):
         _new_row = {
             'year': y, 
-            '1 OLO': _olo_max * (olo_rate_of_growth ** (y - _last_year))
+            'Cost of OLO': _olo_max * (olo_rate_of_growth ** (y - _last_year)) 
         }
-        OLO = pd.concat([OLO, pd.DataFrame(_new_row, index=[0])], ignore_index=True)
+        OLO_base = pd.concat([OLO_base, pd.DataFrame(_new_row, index=[0])], ignore_index=True)
 
-
-    OLO['Period'] = OLO['year'] - 2025
-    return OLO, end_of_forecast, olo_rate_of_growth
+    OLO_base['Cost of OLO'] = OLO_base['Cost of OLO'].astype('float64')
+    #
+    return OLO_base, end_of_forecast, olo_rate_of_growth
 
 
 @app.cell
@@ -102,6 +106,8 @@ def _(mo):
     1. Increase in fees (in %)
     2. Removing / adding options of collection schedules
     3. Number of people per large 1,100L bin
+
+    You can also adjust the assumed cost of OLO to the city by pressing the yellow **'Edit/Reset OLO costs'**. A table will appear where you can edit costs for each year until year `2040`. Upon changing the table, results will be automatically updated. Pressing the yellow button again will reset the values to initital assumptions.
 
     The simulation is parametrized differently for individual homes and differently for businesses/coops. This is because the assumption is that these groups respond differently to fee increases. While individual home owners can respond by frequency changes only (usually only have on bin), coops and businesses mostly adjust the number of bins, and only if this is not an option do they drop frequencies. 
 
@@ -219,6 +225,35 @@ def _(mo, pd):
     )
 
 
+@app.cell
+def _(mo):
+    olo_edit_button = mo.ui.run_button(label='Edit/Reset OLO costs', kind='warn')
+    olo_edit_button
+    return (olo_edit_button,)
+
+
+@app.cell
+def _(OLO_base, mo, olo_edit_button):
+    mo.stop(not olo_edit_button.value)
+    olo_editor = mo.ui.data_editor(data=OLO_base)
+
+    mo.vstack([
+        mo.md('### Adjust expected cost of OLO'), 
+        mo.md('You can adjust the expected cost to the city of the service of OLO in EUR per year, incl. VAT of 23 %:'), 
+        olo_editor
+    ])
+
+    return (olo_editor,)
+
+
+@app.cell
+def _(olo_editor):
+    OLO = olo_editor.value
+    OLO['Period'] = OLO['year'] - 2025
+    OLO.rename(columns={'Cost of OLO': '1 OLO'}, inplace=True)
+    return (OLO,)
+
+
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(
@@ -246,13 +281,13 @@ def _(alt, mo, results_overview):
         _df = result_df.query('Model == @model')[['Period','Fee_forecast','Scenario']].copy()
         _exp_df = result_df.query('Model == @model and Scenario == "1 Baseline"').drop(columns=['Fee_forecast','Bin_forecast','Scenario'])
         _melt_exp = _exp_df.melt(id_vars=['Period'], value_vars=['1 OLO', '2 Other Expenses', '3 MC Share', '4 OLO Yards'], var_name='Category',value_name='Expenses').sort_values(by=['Category'], ascending=True)
-    
+
         lines_chart = alt.Chart(_df).mark_trail().encode(x='Period', y='Fee_forecast',color='Scenario')
 
         bar_chart = alt.Chart(_melt_exp).mark_bar(size=25).encode(x='Period',y='Expenses',color='Category')
 
         return lines_chart + bar_chart 
-    
+
 
     total_simple = mo.ui.altair_chart(summary_chart('Simple model', results_together), label="Total fee forecast per behavioral scenario (Simple)")
     total_stepped = mo.ui.altair_chart(summary_chart('Stepped model', results_together), label="Total fee forecast per behavioral scenario (Stepped)")
@@ -371,7 +406,6 @@ def _(fee_data):
     coop_old_fees = coop_baseline[['FeePerBin']].values
     coop_old_bin_ratio = coop_baseline[['BinPerPoint']].values
     coop_old_points = coop_baseline[['CollectionPoints']].values
-
     return coop_old_bin_ratio, coop_old_fees, coop_old_points
 
 
@@ -382,7 +416,6 @@ def _(global_fee_growth, np):
         rate_array = np.full(shape=periods.shape, fill_value=rate_of_inc)
         index_array = rate_array ** periods
         return index_array
-
     return (indexer,)
 
 
@@ -405,7 +438,7 @@ def _(
         # define values
         coop_fee_hike_pct = price_increase/100.0
         coop_new_fees = initial_fees * (1 + coop_fee_hike_pct)
-        
+
         simple_coop_forecast_bins, latest_sample = bin_per_point_forecast(initial_state, point_count, coop_fee_hike_pct, periods, people_per_bin=people_per_bin, scenario=scenario)
         simple_coop_forecast_fees = simple_coop_forecast_bins * coop_new_fees.T
         simple_coop_forecast_fees[0] = simple_coop_forecast_bins[0] * initial_fees.T 
@@ -427,7 +460,7 @@ def _(
 @app.cell
 def _(SCENARIO, coop_results, indexer, np, pd, stepped_coop):
     def coop_result_stepped(scenario: int = 1):
-    
+
         stepped_coop_bins, stepped_coop_fees = stepped_coop(scenario)
         stepped_coop_bins_total = stepped_coop_bins.sum(axis=1)
         stepped_coop_fees_total = stepped_coop_fees.sum(axis=1)
@@ -435,8 +468,8 @@ def _(SCENARIO, coop_results, indexer, np, pd, stepped_coop):
         periods = np.arange(len(stepped_coop_fees_total))
         index_array = indexer(periods)
         stepped_coop_fees_total = stepped_coop_fees_total * index_array
-    
-    
+
+
         return pd.DataFrame(
             {'Coop fees': stepped_coop_fees_total,
              'Coop bin count': stepped_coop_bins_total,
@@ -492,7 +525,6 @@ def _(ind_old_fees, indexer, np, pd, run_individual):
          'Individual bin count': ind_bin_evolution_total,
          'Period': periods,
          'Scenario': 'Simple model'})
-
     return (ind_results_simple,)
 
 
@@ -535,7 +567,7 @@ def _(
         return bin_evolution, fee_evolution
 
     def ind_results_stepped(scenario: int): 
-    
+
         stepped_ind_bins, stepped_ind_fees = stepped_individual(SCENARIO)
         stepped_ind_bins_total = stepped_ind_bins.sum(axis=1)
         stepped_ind_fees_total = stepped_ind_fees.sum(axis=1)
@@ -624,7 +656,7 @@ def _(
 
         expenses['2 Other Expenses'] = other_exp 
         return expenses
-    
+
     def results_overview():
 
         """
@@ -634,7 +666,7 @@ def _(
         Then we aggregate ind + coop for each scenario and each model option (simple/stepped) per period.
 
         helpers
-    
+
         coop_result_simple(coop_old_bin_ratio, coop_old_fees, coop_old_points, fee_hike_coop.value, forecast_periods_coop.value, people_per_bin=persons_per_bin_coop.value, scenario=SCENARIO)
 
         coop_result_stepped(SCENARIO)
@@ -680,7 +712,7 @@ def _(
                 coop_stepped = equalize_frames(ind_stepped, coop_stepped)
             elif ind_stepped.shape[0] < coop_stepped.shape[0]:
                 ind_stepped = equalize_frames(coop_stepped, ind_stepped)
-                
+
             simple = pd.concat([coop_simple, ind_simple], ignore_index=True)
             simple['Scenario'] = scenarios[scenario]
             simple_detail.append(simple)
@@ -704,7 +736,7 @@ def _(
         return together, together_detail
 
 
-        
+
     return (results_overview,)
 
 
