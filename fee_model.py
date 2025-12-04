@@ -258,11 +258,13 @@ def _(alt, mo, results_overview):
         _exp_df = result_df.query('Model == @model and Scenario == "2 Standard Response"').drop(columns=['Fee_forecast','Bin_forecast','Scenario'])
         _melt_exp = _exp_df.melt(id_vars=['Period'], value_vars=['1 OLO', '2 Other Expenses', '3 MC Share', '4 OLO Yards'], var_name='Category',value_name='Expenses').sort_values(by=['Category'], ascending=True)
 
-        lines_chart = alt.Chart(_df).mark_trail().encode(x='Period', 
+        lines_chart = alt.Chart(_df).mark_trail().encode(alt.X('Period').axis(format='0d', 
+                                                                             tickCount=_df.Period.max()), 
                                                          y='Fee_forecast',
                                             color=alt.Color('Scenario').scale(scheme='paired'))
 
-        bar_chart = alt.Chart(_melt_exp).mark_bar(size=25).encode(x='Period',y='Expenses',color='Category')
+        bar_chart = alt.Chart(_melt_exp).mark_bar(size=25).encode(alt.X('Period').axis(format='0d', 
+                                                                             tickCount=_df.Period.max()),y='Expenses',color='Category')
 
         return lines_chart + bar_chart 
 
@@ -275,6 +277,12 @@ def _(alt, mo, results_overview):
         total_simple,
         total_stepped
     ])
+    return (results_together,)
+
+
+@app.cell
+def _(results_together):
+    results_together
     return
 
 
