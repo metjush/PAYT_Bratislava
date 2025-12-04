@@ -107,11 +107,25 @@ def _(mo):
     2. Removing / adding options of collection schedules
     3. Number of people per large 1,100L bin
 
+    Run the model by pressing the green button **'Run Model'**.
+
     You can also adjust the assumed cost of OLO to the city by pressing the yellow **'Edit/Reset OLO costs'**. A table will appear where you can edit costs for each year until year `2040`. Upon changing the table, results will be automatically updated. Pressing the yellow button again will reset the values to initital assumptions.
 
     The simulation is parametrized differently for individual homes and differently for businesses/coops. This is because the assumption is that these groups respond differently to fee increases. While individual home owners can respond by frequency changes only (usually only have on bin), coops and businesses mostly adjust the number of bins, and only if this is not an option do they drop frequencies. 
 
     You can setup a simple model (one % fee increase) or a stepped model where we can schedule several adjustments to fees over time.
+
+    ## Sensitivity settings (behavioral response)
+
+    The default model assumes a behavioral response to the changes in fees and other conditions that is most consistent with past trends. This data is very limited, and so we need to model different scenarios of how people might react to policy changes. 
+
+    You can choose these following scenarios to simulate:
+
+    1. **No behavioral change**: This scenario assumes no behavioral changes to an increase in fees. The only reaction that is required is when the weekly schedule is disabled. This will lead to a transfer of all households with a weekly schedule to a fortnightly schedule with the larger bin.
+    2. **Standard response**: This is the default scenario that mostly follows an extrapolation of what was observed after the last change to the fee structure. It assumes a fairly muted behavioral response to an increase in fees. However, the capacity of households to bear higher fees is assumed to fall with greater increases (even when you stagger them in multiple steps).
+    3. **Strong response**: This is a scenario where we assume that compared to 2023, the financial situation of households has worsened (following inflation and increases in other national taxes). Therefore the reaction to a higher waste fee will be more pronounced this time.
+
+    In the results, we also show a scenario of **No Policy Change**. That is, a scenario without changes to fees or other reforms that would affect revenues. 
     """
     )
     return
@@ -124,10 +138,10 @@ def _(mo):
     global_fee_growth = mo.ui.slider(0, 10, 0.1, include_input=True, show_value=True, value=1.5)
     yard_takeover = mo.ui.checkbox(value=False)
     average_bin_fullness = mo.ui.slider(0,100,show_value=True, include_input=True, value=53)
-    scenario_selector = mo.ui.dropdown(options = {'1 Baseline': 1, '2 Austerity': 2, '3 Business as usual': 3},
+    scenario_selector = mo.ui.dropdown(options = {'1 No Change': 3, '2 Standard Response': 1, '3 Strong Response': 2},
                                        allow_select_none=False,
                                        searchable=True, 
-                                       value='1 Baseline'
+                                       value='2 Standard Response'
                                       )
 
     other_cost_baseline = mo.ui.number(start=0, value=1070384)
@@ -228,48 +242,10 @@ def _(mo, pd):
 @app.cell
 def _(mo):
     olo_edit_button = mo.ui.run_button(label='Edit/Reset OLO costs', kind='warn')
-    olo_edit_button
-    return (olo_edit_button,)
+    general_run_button = mo.ui.run_button(label='Run Model', kind='success')
 
-
-@app.cell
-def _(OLO_base, mo, olo_edit_button):
-    mo.stop(not olo_edit_button.value)
-    olo_editor = mo.ui.data_editor(data=OLO_base)
-
-    mo.vstack([
-        mo.md('### Adjust expected cost of OLO'), 
-        mo.md('You can adjust the expected cost to the city of the service of OLO in EUR per year, incl. VAT of 23 %:'), 
-        olo_editor
-    ])
-
-    return (olo_editor,)
-
-
-@app.cell
-def _(olo_editor):
-    OLO = olo_editor.value
-    OLO['Period'] = OLO['year'] - 2025
-    OLO.rename(columns={'Cost of OLO': '1 OLO'}, inplace=True)
-    return (OLO,)
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(
-        r"""
-    ## Sensitivity settings (behavioral response)
-
-    The default model assumes a behavioral response to the changes in fees and other conditions that is most consistent with past trends. This data is very limited, and so we need to model different scenarios of how people might react to policy changes. 
-
-    You can choose these following scenarios to simulate:
-
-    1. **Baseline**: This is the default scenario that mostly follows an extrapolation of what was observed after the last change to the fee structure. It assumes a fairly muted behavioral response to an increase in fees. However, the capacity of households to bear higher fees is assumed to fall with greater increases (even when you stagger them in multiple steps).
-    2. **Austerity**: This is the pessimistic scenario where we assume that compared to 2023, the financial situation of households has worsened (following inflation and increases in other national taxes). Therefore the reaction to a higher waste fee will be more pronounced this time.
-    3. **Business as usual**: This scenario assumes no behavioral changes to an increase in fees. The only reaction that is required is when the weekly schedule is disabled. This will lead to a transfer of all households with a weekly schedule to a fortnightly schedule with the larger bin.
-    """
-    )
-    return
+    mo.hstack([general_run_button, olo_edit_button])
+    return general_run_button, olo_edit_button
 
 
 @app.cell(hide_code=True)
@@ -279,10 +255,12 @@ def _(alt, mo, results_overview):
     def summary_chart(model, result_df):
 
         _df = result_df.query('Model == @model')[['Period','Fee_forecast','Scenario']].copy()
-        _exp_df = result_df.query('Model == @model and Scenario == "1 Baseline"').drop(columns=['Fee_forecast','Bin_forecast','Scenario'])
+        _exp_df = result_df.query('Model == @model and Scenario == "2 Standard Response"').drop(columns=['Fee_forecast','Bin_forecast','Scenario'])
         _melt_exp = _exp_df.melt(id_vars=['Period'], value_vars=['1 OLO', '2 Other Expenses', '3 MC Share', '4 OLO Yards'], var_name='Category',value_name='Expenses').sort_values(by=['Category'], ascending=True)
 
-        lines_chart = alt.Chart(_df).mark_trail().encode(x='Period', y='Fee_forecast',color='Scenario')
+        lines_chart = alt.Chart(_df).mark_trail().encode(x='Period', 
+                                                         y='Fee_forecast',
+                                            color=alt.Color('Scenario').scale(scheme='paired'))
 
         bar_chart = alt.Chart(_melt_exp).mark_bar(size=25).encode(x='Period',y='Expenses',color='Category')
 
@@ -298,6 +276,27 @@ def _(alt, mo, results_overview):
         total_stepped
     ])
     return
+
+
+@app.cell
+def _(OLO_base, general_run_button, mo, olo_edit_button):
+    mo.stop(not (olo_edit_button.value or general_run_button.value), mo.md('***Run the model to show full results***'))
+    olo_editor = mo.ui.data_editor(data=OLO_base)
+
+    mo.vstack([
+        mo.md('### Adjust expected cost of OLO'), 
+        mo.md('You can adjust the expected cost to the city of the service of OLO in EUR per year, incl. VAT of 23 %:'), 
+        olo_editor
+    ])
+    return (olo_editor,)
+
+
+@app.cell
+def _(olo_editor):
+    OLO = olo_editor.value
+    OLO['Period'] = OLO['year'] - 2025
+    OLO.rename(columns={'Cost of OLO': '1 OLO'}, inplace=True)
+    return (OLO,)
 
 
 @app.cell(hide_code=True)
@@ -407,6 +406,12 @@ def _(fee_data):
     coop_old_bin_ratio = coop_baseline[['BinPerPoint']].values
     coop_old_points = coop_baseline[['CollectionPoints']].values
     return coop_old_bin_ratio, coop_old_fees, coop_old_points
+
+
+@app.cell
+def _(fee_data):
+    baseline_fees = fee_data.query('Year == 2025').groupby(['Year'], as_index=False)[['CollectionPoints','BinCount','TotalFee']].sum()
+    return (baseline_fees,)
 
 
 @app.cell
@@ -606,6 +611,7 @@ def _(
 @app.cell
 def _(
     OLO,
+    baseline_fees,
     coop_old_bin_ratio,
     coop_old_fees,
     coop_old_points,
@@ -620,6 +626,7 @@ def _(
     ind_results_simple,
     ind_results_stepped,
     indexer,
+    np,
     olo_multiplier,
     other_cost_baseline,
     pd,
@@ -641,7 +648,7 @@ def _(
     def build_expenses():
 
         expenses = OLO.copy()
-
+      
         expenses['4 OLO Yards'] = 0.
 
         if yard_takeover.value:
@@ -681,10 +688,12 @@ def _(
         stepped_results = []
         COLS = ['Fee_forecast','Bin_forecast','Period','Model']
         scenarios = {
-            1: '1 Baseline',
-            2: '2 Austerity',
-            3: '3 Business as usual'
+            1: '2 Standard Response',
+            2: '3 Strong Response',
+            3: '1 No Behavioral Change'
         }
+
+        periods = [0,0]
 
         for scenario in [1,2,3]:
 
@@ -707,11 +716,15 @@ def _(
             elif ind_simple.shape[0] < coop_simple.shape[0]:
                 ind_simple = equalize_frames(coop_simple, ind_simple)
 
+            periods[0] = ind_simple.shape[0]
+
             # check need to extend forecast in one or other result
             if ind_stepped.shape[0] > coop_stepped.shape[0]:
                 coop_stepped = equalize_frames(ind_stepped, coop_stepped)
             elif ind_stepped.shape[0] < coop_stepped.shape[0]:
                 ind_stepped = equalize_frames(coop_stepped, ind_stepped)
+
+            periods[1] = ind_stepped.shape[0]
 
             simple = pd.concat([coop_simple, ind_simple], ignore_index=True)
             simple['Scenario'] = scenarios[scenario]
@@ -725,7 +738,28 @@ def _(
             stepped_group = stepped.groupby(['Scenario','Model','Period'], as_index=False)[['Fee_forecast','Bin_forecast']].sum()
             stepped_results.append(stepped_group)
 
-        together = pd.concat(simple_results+stepped_results, ignore_index=True)
+        # add NPC scenario 
+
+        simple_indexer = indexer(np.arange(periods[0]))
+        stepped_indexer = indexer(np.arange(periods[1]))
+        start_fee = baseline_fees['TotalFee'].values[0]
+        simple_npc_fees = start_fee * simple_indexer 
+        stepped_npc_fees = start_fee * stepped_indexer 
+
+        simple_npc_df = pd.DataFrame(data={
+            'Scenario': ['0 No Policy Change']*periods[0],
+            'Model': ['Simple model']*periods[0],
+            'Period': np.arange(periods[0]),
+            'Fee_forecast': simple_npc_fees}, index=np.arange(periods[0]))
+
+        stepped_npc_df = pd.DataFrame(data={
+            'Scenario': ['0 No Policy Change']*periods[1],
+            'Model': ['Stepped model']*periods[1],
+            'Period': np.arange(periods[1]),
+            'Fee_forecast': stepped_npc_fees}, index=np.arange(periods[1]))
+    
+
+        together = pd.concat(simple_results+stepped_results+[simple_npc_df, stepped_npc_df], ignore_index=True)
         together_detail = pd.concat(simple_detail+stepped_detail, ignore_index=True)
 
         # merge OLO
@@ -734,7 +768,6 @@ def _(
         together['3 MC Share'] = together.Fee_forecast * 0.1
 
         return together, together_detail
-
 
 
     return (results_overview,)
@@ -840,7 +873,7 @@ def _(
     return bin_per_point_forecast, stepped_coop
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(mo):
     mo.md(
         r"""
