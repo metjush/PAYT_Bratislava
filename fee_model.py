@@ -272,17 +272,26 @@ def _(alt, mo, results_overview):
     total_simple = mo.ui.altair_chart(summary_chart('Simple model', results_together), label="Total fee forecast per behavioral scenario (Simple)")
     total_stepped = mo.ui.altair_chart(summary_chart('Stepped model', results_together), label="Total fee forecast per behavioral scenario (Stepped)")
 
+    export_button = mo.ui.run_button(label='Show data to export')
+
     mo.vstack([
         mo.md('## Total results for all behavioral scenarios'),
         total_simple,
-        total_stepped
+        total_stepped,
+        export_button
     ])
-    return (results_together,)
+    return export_button, results_together
 
 
 @app.cell
-def _(results_together):
-    results_together
+def _(export_button, mo, results_together):
+    mo.stop(not export_button.value)
+    mo.vstack([
+        mo.md('### Data from total results chart to export'),
+        mo.md('You can press *Download* under the table to export your data to CSV to be used in Excel'),
+        mo.md('Charts can be saved by clicking the ... button in the corner of the chart as an image'),
+        results_together
+    ])
     return
 
 
