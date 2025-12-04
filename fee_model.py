@@ -196,14 +196,14 @@ def _(mo, pd):
     remove_weekly = mo.ui.checkbox()
     forecast_periods = mo.ui.slider(0,20, show_value=True, include_input=True, value=5)
 
-    ind_setup_df = pd.DataFrame(columns=['Fee Hike','Year Gap','Disable Weekly Option'], data=[[30,5,False]])
+    ind_setup_df = pd.DataFrame(columns=['Fee Hike','Year Gap','Maximum 14d Interval'], data=[[30,5,False]])
     ind_setup_editor = mo.ui.data_editor(data=ind_setup_df)
 
 
     mo.vstack([
         mo.md('### Individual homes (simple setup)'),
         mo.hstack([mo.md('**1 Increase in standard fee in %**'), fee_hike], align='center'),
-        mo.hstack([mo.md('**2 Disable once per week frequency option for individual homes**'), remove_weekly],  align='center'),
+        mo.hstack([mo.md('**2 Force a maximum 14d interval for individual homes**'), remove_weekly],  align='center'),
         mo.hstack([mo.md('**3 Number of years to forecast**'), forecast_periods], align='center'),
         mo.md('### Individual homes (complex setup)'),
         mo.md('In this table, you can add multiple rows as steps in gradual fee increase / change'),
@@ -556,7 +556,7 @@ def _(
             step_values = step[1]
             price_hike = price_hike + (step_values['Fee Hike'] / 100.)
             _new_fees = old_fees * (1 + price_hike)
-            _evolution = run_individual(baseline_bins, step_values['Year Gap']+1, 0, price_increase = price_hike, remove_weekly = step_values['Disable Weekly Option'], scenario = scenario)
+            _evolution = run_individual(baseline_bins, step_values['Year Gap']+1, 0, price_increase = price_hike, remove_weekly = step_values['Maximum 14d Interval'], scenario = scenario)
             _fee_evolution = _evolution * _new_fees.T 
             if len(bin_evolution) == 0:
                 _fee_evolution[0] = _evolution[0] * old_fees.T
