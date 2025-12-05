@@ -36,12 +36,6 @@ def _(mo, pd):
 
 
 @app.cell
-def _(olo_data):
-    olo_data.set_index('Rok').T.drop(columns=['NakladyOLO'])
-    return
-
-
-@app.cell
 def _(np, olo_data, pd):
     # clean OLO data
     transposed_olo = olo_data.set_index('Rok').T.drop(columns=['NakladyOLO'])
@@ -71,8 +65,6 @@ def _(np, olo_data, pd):
             _new_row[col] = _olo_max * _olo_rate_of_growth 
           
         OLO_base = pd.concat([OLO_base, pd.DataFrame(_new_row, index=[0])], ignore_index=True)
-
-    OLO_base
     return OLO_base, end_of_forecast
 
 
@@ -104,16 +96,27 @@ def _(mo):
     In this notebook we can simulate impacts of waste collection reforms on tax revenue and expenditures of OLO. 
     We will adjust different parameters to show the expected evolution of key indicators in various scenarios. Since we have little available past data on how people in Bratislava respond to changes in waste collection, we need to model different scenarios to show a potential range of outcomes. 
 
-    There are general assumptions you can setup: 
+    **There are general assumptions you can setup:**
 
     1. Annual rate of growth for fee collection. Default is `1.5%` per year. This represents new construction and more people moving in to the city.
     2. Share of individual bins that are filled to capacity. Default is `53%`. This reflects latest results from a study of individual homes. This impacts how many people move to larger bins.
     3. Assumption for how much more expensive OLO is compared to local yards. Default is `1.5x`. This reflects that when local districts handle waste, they usually choose cheaper options.
     4. Whether OLO should take over local waste collection yards. If yes, the collection costs are added to costs of OLO.
     5. Behavioral scenario (see below). Total results show results for all scenarios.
-    6. Baseline value for other expenses covered by the waste fees. 
+    6. Baseline value for other expenses covered by the waste fees.
+    7. Frequency of pickup of organic waste:
 
-    Here you can set up the simulation: 
+    **Organic waste collection:** 
+
+    Currently organic waste is picked up 2x/week between April and November. During winter, this happens 1x/week. 
+    This is the `Default` option. You can change this to: 
+
+    1. 2x/week all year. This is assumed to increase the number of pickups from 87 to 104 and therefore increase costs by `~19.5%`.
+    2. 1x/week all year. This is assumed to decrease the number of pickups from 87 to 52 and therefore lower costs by `~40%`.
+
+    The impact will be shown on the expenditure side, in the `1 OLO` line item.
+
+    **Here you can set up the simulation:**
 
     1. Increase in fees (in %)
     2. Removing / adding options of collection schedules
@@ -158,6 +161,9 @@ def _(mo):
 
     other_cost_baseline = mo.ui.number(start=0, value=1070384)
     olo_multiplier = mo.ui.slider(0,10,0.1, include_input=True, show_value=True, value=1.5)
+    organic_waste_pickup = mo.ui.dropdown(options = {'Default': 0, '2x/week': 1, '1x/week': 2},
+                                          allow_select_none=False,
+                                         value='Default')
 
     mo.vstack([
         mo.md('## Parameter setup'),
@@ -190,12 +196,19 @@ def _(mo):
                 mo.md('**2024 value for other expenses covered by waste fees**'), 
                 other_cost_baseline
             ])
+        ]),
+        mo.hstack([
+            mo.vstack([
+                mo.md('**Organic waste pickup frequency**'),
+                organic_waste_pickup
+            ])
         ])
     ])
     return (
         average_bin_fullness,
         global_fee_growth,
         olo_multiplier,
+        organic_waste_pickup,
         other_cost_baseline,
         scenario_selector,
         yard_takeover,
@@ -261,10 +274,19 @@ def _(mo):
 
 
 @app.cell(hide_code=True)
-def _(alt, general_run_button, mo, olo_edit_button, results_overview):
+def _(
+    alt,
+    general_run_button,
+    mo,
+    olo_edit_button,
+    organic_waste_pickup,
+    results_overview,
+):
     mo.stop(not (olo_edit_button.value or general_run_button.value), mo.md('***Run the model to show full results***'))
 
     results_together, detailed_results_together = results_overview()
+
+    organic_schedule = organic_waste_pickup.selected_key
 
     def summary_chart(model, result_df):
 
@@ -283,8 +305,8 @@ def _(alt, general_run_button, mo, olo_edit_button, results_overview):
         return lines_chart + bar_chart 
 
 
-    total_simple = mo.ui.altair_chart(summary_chart('Simple model', results_together), label="Total fee forecast per behavioral scenario (Simple)")
-    total_stepped = mo.ui.altair_chart(summary_chart('Stepped model', results_together), label="Total fee forecast per behavioral scenario (Stepped)")
+    total_simple = mo.ui.altair_chart(summary_chart('Simple model', results_together), label=f"Total fee forecast per behavioral scenario (Simple | Organic Pickup: {organic_schedule})")
+    total_stepped = mo.ui.altair_chart(summary_chart('Stepped model', results_together), label=f"Total fee forecast per behavioral scenario (Stepped | Organic Pickup: {organic_schedule})")
 
     export_button = mo.ui.run_button(label='Show data to export')
 
@@ -323,8 +345,36 @@ def _(OLO_base, general_run_button, mo, olo_edit_button):
 
 
 @app.cell
-def _(olo_editor):
-    OLO = olo_editor.value
+def _(olo_editor, organic_waste_pickup):
+    def update_organic(cost_df):
+        organic_schedule = organic_waste_pickup.value
+        if organic_schedule == 0:
+            return cost_df
+        if organic_schedule == 1: # 2x week even in winter 
+            """
+            Now we have 2x week from Apr to November = 35 weeks = 70 pickups 
+            1x week from Dec to Mar = 17 weeks = 17 pickups 
+            Total # of pickups = 87
+            Going to full 2x increases the number of pickups by 17 to 104
+            Cost increase is 104/87
+            """
+            cost_df['Organic waste collection'] = cost_df['Organic waste collection'] * (104./87.)
+            return cost_df 
+        if organic_schedule == 2: # 1x week all year
+            """
+            Now we have 2x week from Apr to November = 35 weeks = 70 pickups 
+            1x week from Dec to Mar = 17 weeks = 17 pickups 
+            Total # of pickups = 87
+            Going to 1x decreases the number of pickups by 35 to 52
+            Cost fall is 52/87
+            """
+            cost_df['Organic waste collection'] = cost_df['Organic waste collection'] * (52./87.)
+            return cost_df 
+        return cost_df 
+        
+    
+
+    OLO = update_organic(olo_editor.value)
     OLO['1 OLO'] = OLO.drop(columns=['year']).sum(axis=1)
     OLO['Period'] = OLO['year'] - 2025
     OLO = OLO.query('year > 2024')
