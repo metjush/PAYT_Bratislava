@@ -36,41 +36,53 @@ def _(mo, pd):
 
 
 @app.cell
-def _(np, olo_data, pd):
-    # clean OLO data
-    transposed_olo = olo_data.T
-    transposed_olo.columns = transposed_olo.iloc[0]
-    OLO_base = transposed_olo.drop(transposed_olo.index[0]).reset_index()[['index','NakladyOLO']].rename(columns={'index':'year', 'NakladyOLO':'Cost of OLO'})
-
-    # VAT
-    VAT = 0.23
-    OLO_base['Cost of OLO'] = OLO_base['Cost of OLO'] * (1 + VAT)
-
-    # extend expenses further
-    _olo_years = OLO_base['year'].count() - 1
-    _olo_min = OLO_base['Cost of OLO'].values[0]
-    _olo_max = OLO_base['Cost of OLO'].values[-1]
-    olo_rate_of_growth = np.power((_olo_max / _olo_min), 1/_olo_years)
-    _last_year = OLO_base['year'].max()
-    end_of_forecast = 2041
-    for y in range(_last_year + 1, end_of_forecast):
-        _new_row = {
-            'year': y, 
-            'Cost of OLO': _olo_max * (olo_rate_of_growth ** (y - _last_year)) 
-        }
-        OLO_base = pd.concat([OLO_base, pd.DataFrame(_new_row, index=[0])], ignore_index=True)
-
-    OLO_base['Cost of OLO'] = OLO_base['Cost of OLO'].astype('float64')
-    #
-    return OLO_base, end_of_forecast, olo_rate_of_growth
+def _(olo_data):
+    olo_data.set_index('Rok').T.drop(columns=['NakladyOLO'])
+    return
 
 
 @app.cell
-def _(end_of_forecast, olo_rate_of_growth, pd, yard_data):
+def _(np, olo_data, pd):
+    # clean OLO data
+    transposed_olo = olo_data.set_index('Rok').T.drop(columns=['NakladyOLO'])
+    ## VAT
+    VAT = 0.23
+    transposed_olo = transposed_olo * (1 + VAT)
+
+
+    OLO_base = transposed_olo.reset_index().rename(columns={'index':'year'})
+
+    # extend expenses further
+    _olo_years = OLO_base['year'].count() - 1
+    _last_year = OLO_base['year'].max()
+    end_of_forecast = 2041
+
+    for y in range(_last_year + 1, end_of_forecast):
+        _new_row = {
+            'year': y
+        }
+        for col in OLO_base.columns:
+            if col == 'year':
+                continue 
+            _olo_min = OLO_base[col].values[0]
+            _olo_max = OLO_base[col].values[-1]
+            _olo_rate_of_growth = np.power((_olo_max / _olo_min), 1/_olo_years)
+
+            _new_row[col] = _olo_max * _olo_rate_of_growth 
+          
+        OLO_base = pd.concat([OLO_base, pd.DataFrame(_new_row, index=[0])], ignore_index=True)
+
+    OLO_base
+    return OLO_base, end_of_forecast
+
+
+@app.cell
+def _(OLO_base, end_of_forecast, np, pd, yard_data):
     yard_data['year'] = 2024
     yard_pivot = yard_data.pivot(columns=['Mestska_cast'],index=['year'],values=['Naklady_zhodnotenie'])
     yard_total = yard_pivot.sum(axis=1).reset_index()
     yard_total.columns = ['year','yard_cost']
+    olo_rate_of_growth = np.power(OLO_base.sum(axis=1).max() / OLO_base.sum(axis=1).min(), 1/OLO_base.shape[0])
     _cost = yard_total.yard_cost.values[0]
     for _y in range(2025, end_of_forecast):
         _new_row = {
@@ -125,7 +137,7 @@ def _(mo):
     2. **Standard response**: This is the default scenario that mostly follows an extrapolation of what was observed after the last change to the fee structure. It assumes a fairly muted behavioral response to an increase in fees. However, the capacity of households to bear higher fees is assumed to fall with greater increases (even when you stagger them in multiple steps).
     3. **Strong response**: This is a scenario where we assume that compared to 2023, the financial situation of households has worsened (following inflation and increases in other national taxes). Therefore the reaction to a higher waste fee will be more pronounced this time.
 
-    In the results, we also show a scenario of **No Policy Change**. That is, a scenario without changes to fees or other reforms that would affect revenues. 
+    In the results, we also show a scenario of **No Policy Change**. That is, a scenario without changes to fees or other reforms that would affect revenues.
     """
     )
     return
@@ -249,7 +261,9 @@ def _(mo):
 
 
 @app.cell(hide_code=True)
-def _(alt, mo, results_overview):
+def _(alt, general_run_button, mo, olo_edit_button, results_overview):
+    mo.stop(not (olo_edit_button.value or general_run_button.value), mo.md('***Run the model to show full results***'))
+
     results_together, detailed_results_together = results_overview()
 
     def summary_chart(model, result_df):
@@ -311,8 +325,9 @@ def _(OLO_base, general_run_button, mo, olo_edit_button):
 @app.cell
 def _(olo_editor):
     OLO = olo_editor.value
+    OLO['1 OLO'] = OLO.drop(columns=['year']).sum(axis=1)
     OLO['Period'] = OLO['year'] - 2025
-    OLO.rename(columns={'Cost of OLO': '1 OLO'}, inplace=True)
+    OLO = OLO.query('year > 2024')
     return (OLO,)
 
 
@@ -665,7 +680,7 @@ def _(
     def build_expenses():
 
         expenses = OLO.copy()
-      
+
         expenses['4 OLO Yards'] = 0.
 
         if yard_takeover.value:
@@ -774,7 +789,7 @@ def _(
             'Model': ['Stepped model']*periods[1],
             'Period': np.arange(periods[1]),
             'Fee_forecast': stepped_npc_fees}, index=np.arange(periods[1]))
-    
+
 
         together = pd.concat(simple_results+stepped_results+[simple_npc_df, stepped_npc_df], ignore_index=True)
         together_detail = pd.concat(simple_detail+stepped_detail, ignore_index=True)
@@ -785,7 +800,6 @@ def _(
         together['3 MC Share'] = together.Fee_forecast * 0.1
 
         return together, together_detail
-
 
     return (results_overview,)
 
