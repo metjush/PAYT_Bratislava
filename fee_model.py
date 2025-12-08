@@ -361,7 +361,7 @@ def _(
     ind_old_fees,
     ind_setup_editor,
 ):
-     # create model households
+    # create model households
     ind_fee_hike_simple = (1 + fee_hike.value/100.)
     ind_fee_hike_step = (1 + ind_setup_editor.value['Fee Hike'].div(100.)).product()
     ## 1 Individual household, 1x weekly 120L
