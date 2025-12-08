@@ -63,7 +63,7 @@ def _(np, olo_data, pd):
             _olo_rate_of_growth = np.power((_olo_max / _olo_min), 1/_olo_years)
 
             _new_row[col] = _olo_max * _olo_rate_of_growth 
-          
+
         OLO_base = pd.concat([OLO_base, pd.DataFrame(_new_row, index=[0])], ignore_index=True)
     return OLO_base, end_of_forecast
 
@@ -265,6 +265,148 @@ def _(mo, pd):
 
 
 @app.cell
+def _(
+    mo,
+    new_fee_1_simple,
+    new_fee_1_step,
+    new_fee_2_simple,
+    new_fee_2_step,
+    new_fee_3_simple,
+    new_fee_3_step,
+    new_fee_4_simple,
+    new_fee_4_step,
+    old_fee_1,
+    old_fee_2,
+    old_fee_3,
+    old_fee_4,
+):
+    mo.vstack([
+        mo.md('## Illustrations of monthly fee rises for current setup'),
+        mo.hstack([
+            mo.vstack([
+                mo.md('#### Simple setup'),
+                mo.stat(
+                    label='1 Individual home | Weekly pickup | 120L',
+                    value=f'{(old_fee_1/12.):.1f} € → {new_fee_1_simple/12.:.1f} €', 
+                    direction='increase',
+                    caption=f'{(new_fee_1_simple-old_fee_1)/12.:.1f} € monthly increase', 
+                    bordered=True
+                ), 
+                mo.stat(
+                    label='2 Individual home | 2x monthly pickup | 120L',
+                    value=f'{(old_fee_2/12.):.1f} € → {new_fee_2_simple/12.:.1f} €', 
+                    direction='increase',
+                    caption=f'{(new_fee_2_simple-old_fee_2)/12.:.1f} € monthly increase', 
+                    bordered=True
+                )
+                , 
+                mo.stat(
+                    label='3 Block of flats | 2x weekly pickup | 1100L | 45 people per bin',
+                    value=f'{(old_fee_3/12.):.1f} € → {new_fee_3_simple/12.:.1f} €', 
+                    direction='increase',
+                    caption=f'{(new_fee_3_simple-old_fee_3)/12.:.1f} € monthly increase', 
+                    bordered=True
+                ), 
+                mo.stat(
+                    label='4 Block of flats | 3x weekly pickup | 1100L | 60 people per bin',
+                    value=f'{(old_fee_4/12.):.1f} € → {new_fee_4_simple/12.:.1f} €', 
+                    direction='increase',
+                    caption=f'{(new_fee_4_simple-old_fee_4)/12.:.1f} € monthly increase', 
+                    bordered=True
+                )
+            ]),
+            mo.vstack([
+                mo.md('#### Stepped setup'),
+                mo.stat(
+                    label='1 Individual home | Weekly pickup | 120L',
+                    value=f'{(old_fee_1/12.):.1f} € → {new_fee_1_step/12.:.1f} €', 
+                    direction='increase',
+                    caption=f'{(new_fee_1_step-old_fee_1)/12.:.1f} € monthly increase', 
+                    bordered=True
+                ), 
+                mo.stat(
+                    label='2 Individual home | 2x monthly pickup | 120L',
+                    value=f'{(old_fee_2/12.):.1f} € → {new_fee_2_step/12.:.1f} €', 
+                    direction='increase',
+                    caption=f'{(new_fee_2_step-old_fee_2)/12.:.1f} € monthly increase', 
+                    bordered=True
+                )
+                , 
+                mo.stat(
+                    label='3 Block of flats | 2x weekly pickup | 1100L | 45 people per bin',
+                    value=f'{(old_fee_3/12.):.1f} € → {new_fee_3_step/12.:.1f} €', 
+                    direction='increase',
+                    caption=f'{(new_fee_3_step-old_fee_3)/12.:.1f} € monthly increase', 
+                    bordered=True
+                ), 
+                mo.stat(
+                    label='4 Block of flats | 3x weekly pickup | 1100L | 60 people per bin',
+                    value=f'{(old_fee_4/12.):.1f} € → {new_fee_4_step/12.:.1f} €', 
+                    direction='increase',
+                    caption=f'{(new_fee_4_step-old_fee_4)/12.:.1f} € monthly increase', 
+                    bordered=True
+                )
+            ])
+        ])
+    ])
+    return
+
+
+@app.cell
+def _(
+    coop_setup_editor,
+    fee_data,
+    fee_hike,
+    fee_hike_coop,
+    ind_old_fees,
+    ind_setup_editor,
+):
+     # create model households
+    ind_fee_hike_simple = (1 + fee_hike.value/100.)
+    ind_fee_hike_step = (1 + ind_setup_editor.value['Fee Hike'].div(100.)).product()
+    ## 1 Individual household, 1x weekly 120L
+    old_fee_1 = ind_old_fees[2][0]
+    new_fee_1_simple = old_fee_1 * ind_fee_hike_simple
+    new_fee_1_step = old_fee_1 * ind_fee_hike_step
+    ## 2 Individual household, 2x month 120L
+    old_fee_2 = ind_old_fees[1][0]
+    new_fee_2_simple = old_fee_2 * ind_fee_hike_simple
+    new_fee_2_step = old_fee_2 * ind_fee_hike_step
+
+    _coop_sample = fee_data.query('Payer == "Coop"')
+    _coop_baseline = _coop_sample.query('Year == 2025').groupby(['IntervalPerWeek'], as_index=False)[['CollectionPoints','BinCount','TotalFee','TotalVolume']].sum()
+    _coop_baseline['FeePerBin'] = _coop_baseline['TotalFee'].div(_coop_baseline['BinCount'])
+    _coop_baseline['BinPerPoint'] = _coop_baseline['BinCount'].div(_coop_baseline['CollectionPoints'])
+    _coop_baseline['FeePerPoint'] = _coop_baseline.FeePerBin.multiply(_coop_baseline.BinPerPoint)
+
+    coop_fee_hike_simple = (1 + fee_hike_coop.value/100.)
+    coop_fee_hike_step = (1 + coop_setup_editor.value['Fee Hike'].div(100.)).product()
+    ## 3 Block of flats, 2x weekly 1100L, 45 people per bin 
+    old_fee_3 = _coop_baseline['FeePerBin'].values[2] / 45. 
+    new_fee_3_simple = old_fee_3 * coop_fee_hike_simple
+    new_fee_3_step = old_fee_3 * coop_fee_hike_step
+
+    ## 4 Block of flats, 3x weekly 1100L, 60 people per bin
+    old_fee_4 = _coop_baseline['FeePerBin'].values[3] / 60.
+    new_fee_4_simple = old_fee_4 * coop_fee_hike_simple
+    new_fee_4_step = old_fee_4 * coop_fee_hike_step
+    return (
+        new_fee_1_simple,
+        new_fee_1_step,
+        new_fee_2_simple,
+        new_fee_2_step,
+        new_fee_3_simple,
+        new_fee_3_step,
+        new_fee_4_simple,
+        new_fee_4_step,
+        old_fee_1,
+        old_fee_2,
+        old_fee_3,
+        old_fee_4,
+    )
+
+
+@app.cell
 def _(mo):
     olo_edit_button = mo.ui.run_button(label='Edit/Reset OLO costs', kind='warn')
     general_run_button = mo.ui.run_button(label='Run Model', kind='success')
@@ -371,8 +513,8 @@ def _(olo_editor, organic_waste_pickup):
             cost_df['Organic waste collection'] = cost_df['Organic waste collection'] * (52./87.)
             return cost_df 
         return cost_df 
-        
-    
+
+
 
     OLO = update_organic(olo_editor.value)
     OLO['1 OLO'] = OLO.drop(columns=['year']).sum(axis=1)
@@ -850,7 +992,6 @@ def _(
         together['3 MC Share'] = together.Fee_forecast * 0.1
 
         return together, together_detail
-
     return (results_overview,)
 
 
