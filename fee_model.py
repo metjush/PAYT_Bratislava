@@ -108,7 +108,7 @@ def _(mo):
     1. Annual rate of growth for fee collection. Default is `1.5%` per year. This represents new construction and more people moving in to the city.
     2. Share of individual bins that are filled to capacity. Default is `53%`. This reflects latest results from a study of individual homes. This impacts how many people move to larger bins.
     3. Assumption for how much more expensive OLO is compared to local yards. Default is `1.5x`. This reflects that when local districts handle waste, they usually choose cheaper options.
-    4. Whether OLO should take over local waste collection yards. If yes, the collection costs are added to costs of OLO.
+    4. Whether OLO should take over local waste collection yards. If yes, the collection costs are added to costs of OLO. You can choose between taking over only proper collection yards or all collection points.
     5. Behavioral scenario (see below). Total results show results for all scenarios.
     6. Baseline value for other expenses covered by the waste fees.
     7. Frequency of pickup of organic waste:
@@ -129,9 +129,16 @@ def _(mo):
     2. Removing / adding options of collection schedules
     3. Number of people per large 1,100L bin
 
-    Run the model by pressing the green button **'Run Model'**.
+    You can also adjust the assumed cost of OLO to the city by uploading a new Excel file with updated data. Upon changing the table, results will be automatically updated. The Excel file should contain the following values:
 
-    You can also adjust the assumed cost of OLO to the city by pressing the yellow **'Edit/Reset OLO costs'**. A table will appear where you can edit costs for each year until year `2040`. Upon changing the table, results will be automatically updated. Pressing the yellow button again will reset the values to initital assumptions.
+    | Rok | 2024 | 2025 | 2026 | 2027 | 2028 | 2029 | 2030 |
+    |-----|------|------|------|------|------|------|------|
+    |NakladyOLO|
+    |Incineration|
+    |Residential waste collection|
+    |Green waste collection|
+    |Organic waste collection|
+    |Collection yards/points|
 
     The simulation is parametrized differently for individual homes and differently for businesses/coops. This is because the assumption is that these groups respond differently to fee increases. While individual home owners can respond by frequency changes only (usually only have on bin), coops and businesses mostly adjust the number of bins, and only if this is not an option do they drop frequencies. 
 
