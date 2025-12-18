@@ -24,13 +24,17 @@ def _():
     import numpy as np
     import altair as alt
     import os 
-    return alt, mo, np, pd
+    import io
+    return alt, io, mo, np, pd
 
 
 @app.cell
-def _(mo, pd):
+def _(io, mo, olo_upload, pd):
     fee_data = pd.read_excel(str(mo.notebook_location() / 'public' / 'fee_data.xlsx'))
-    olo_data = pd.read_excel(str(mo.notebook_location() / 'public' / 'olo_exp.xlsx'))
+    if len(olo_upload.value) == 0:
+        olo_data = pd.read_excel(str(mo.notebook_location() / 'public' / 'olo_exp.xlsx'))
+    else:
+        olo_data = pd.read_excel(io.BytesIO(olo_upload.value[0].contents))
     yard_data = pd.read_excel(str(mo.notebook_location() / 'public' / 'yards.xlsx'))
     return fee_data, olo_data, yard_data
 
@@ -69,10 +73,13 @@ def _(np, olo_data, pd):
 
 
 @app.cell
-def _(OLO_base, end_of_forecast, np, pd, yard_data):
+def _(OLO_base, end_of_forecast, np, pd, yard_data, yard_takeover):
     yard_data['year'] = 2024
-    yard_pivot = yard_data.pivot(columns=['Mestska_cast'],index=['year'],values=['Naklady_zhodnotenie'])
-    yard_total = yard_pivot.sum(axis=1).reset_index()
+    yard_pivot = yard_data.pivot(columns=['Mestska_cast'],index=['year'],values='Naklady_zhodnotenie')
+    _cols = yard_pivot.columns.values 
+    if yard_takeover.value == 1:
+        _cols = ['DevinskaNovaVes','Petrzalka','ZahorskaBystrica','Lamac']
+    yard_total = yard_pivot[_cols].sum(axis=1).reset_index()
     yard_total.columns = ['year','yard_cost']
     olo_rate_of_growth = np.power(OLO_base.sum(axis=1).max() / OLO_base.sum(axis=1).min(), 1/OLO_base.shape[0])
     _cost = yard_total.yard_cost.values[0]
@@ -151,7 +158,7 @@ def _(mo):
     # parametrize rate of growth for fees BAU, waste collection yards...
 
     global_fee_growth = mo.ui.slider(0, 10, 0.1, include_input=True, show_value=True, value=1.5)
-    yard_takeover = mo.ui.checkbox(value=False)
+    yard_takeover = mo.ui.dropdown(options = {'0 No': 0, '1 Only Proper Waste Yards': 1, '2 All Yards and Collection Points': 2}, allow_select_none=False, searchable=True, value='0 No')
     average_bin_fullness = mo.ui.slider(0,100,show_value=True, include_input=True, value=53)
     scenario_selector = mo.ui.dropdown(options = {'1 No Change': 3, '2 Standard Response': 1, '3 Strong Response': 2},
                                        allow_select_none=False,
@@ -164,6 +171,8 @@ def _(mo):
     organic_waste_pickup = mo.ui.dropdown(options = {'Default': 0, '2x/week': 1, '1x/week': 2},
                                           allow_select_none=False,
                                          value='Default')
+
+    olo_upload = mo.ui.file(filetypes=['.xls','.xlsx'], multiple=False, kind='button')
 
     mo.vstack([
         mo.md('## Parameter setup'),
@@ -201,6 +210,10 @@ def _(mo):
             mo.vstack([
                 mo.md('**Organic waste pickup frequency**'),
                 organic_waste_pickup
+            ]), 
+            mo.vstack([
+                mo.md('**Upload new OLO expenditure**'),
+                olo_upload
             ])
         ])
     ])
@@ -208,11 +221,17 @@ def _(mo):
         average_bin_fullness,
         global_fee_growth,
         olo_multiplier,
+        olo_upload,
         organic_waste_pickup,
         other_cost_baseline,
         scenario_selector,
         yard_takeover,
     )
+
+
+@app.cell
+def _():
+    return
 
 
 @app.cell(hide_code=True)
@@ -494,26 +513,8 @@ def _(
     )
 
 
-@app.cell
-def _(mo):
-    olo_edit_button = mo.ui.run_button(label='Edit/Reset OLO costs', kind='warn')
-    general_run_button = mo.ui.run_button(label='Run Model', kind='success')
-
-    mo.hstack([general_run_button, olo_edit_button])
-    return general_run_button, olo_edit_button
-
-
 @app.cell(hide_code=True)
-def _(
-    alt,
-    general_run_button,
-    mo,
-    olo_edit_button,
-    organic_waste_pickup,
-    results_overview,
-):
-    mo.stop(not (olo_edit_button.value or general_run_button.value), mo.md('***Run the model to show full results***'))
-
+def _(alt, mo, organic_waste_pickup, results_overview):
     results_together, detailed_results_together = results_overview()
 
     organic_schedule = organic_waste_pickup.selected_key
@@ -562,20 +563,7 @@ def _(export_button, mo, results_together):
 
 
 @app.cell
-def _(OLO_base, general_run_button, mo, olo_edit_button):
-    mo.stop(not (olo_edit_button.value or general_run_button.value), mo.md('***Run the model to show full results***'))
-    olo_editor = mo.ui.data_editor(data=OLO_base)
-
-    mo.vstack([
-        mo.md('### Adjust expected cost of OLO'), 
-        mo.md('You can adjust the expected cost to the city of the service of OLO in EUR per year, incl. VAT of 23 %:'), 
-        olo_editor
-    ])
-    return (olo_editor,)
-
-
-@app.cell
-def _(olo_editor, organic_waste_pickup):
+def _(OLO_base, organic_waste_pickup):
     def update_organic(cost_df):
         organic_schedule = organic_waste_pickup.value
         if organic_schedule == 0:
@@ -604,7 +592,7 @@ def _(olo_editor, organic_waste_pickup):
 
 
 
-    OLO = update_organic(olo_editor.value)
+    OLO = update_organic(OLO_base)
     OLO['1 OLO'] = OLO.drop(columns=['year']).sum(axis=1)
     OLO['Period'] = OLO['year'] - 2025
     OLO = OLO.query('year > 2024')
@@ -963,7 +951,7 @@ def _(
 
         expenses['4 OLO Yards'] = 0.
 
-        if yard_takeover.value:
+        if yard_takeover.value > 0:
             expenses = expenses.merge(yard_total[['year','yard_cost']], on='year', how='left')
             expenses['4 OLO Yards'] = expenses['yard_cost'] * olo_multiplier.value
             expenses.drop(columns=['yard_cost'], inplace=True)
