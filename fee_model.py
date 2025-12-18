@@ -275,13 +275,23 @@ def _(
     new_fee_3_step,
     new_fee_4_simple,
     new_fee_4_step,
+    new_fee_5_simple,
+    new_fee_5_step,
+    new_fee_6_simple,
+    new_fee_6_step,
+    new_fee_7_simple,
+    new_fee_7_step,
     old_fee_1,
     old_fee_2,
     old_fee_3,
     old_fee_4,
+    old_fee_5,
+    old_fee_6,
+    old_fee_7,
 ):
     mo.vstack([
         mo.md('## Illustrations of monthly fee rises for current setup'),
+        mo.md('### Household modelling'),
         mo.hstack([
             mo.vstack([
                 mo.md('#### Simple setup'),
@@ -347,6 +357,59 @@ def _(
                     bordered=True
                 )
             ])
+        ]),
+        mo.md('### Per-bin modelling'),
+        mo.hstack([
+            mo.vstack([
+                mo.md('#### Simple setup'),
+                mo.stat(
+                    label='5 120L | 2x monthly pickup',
+                    value=f'{(old_fee_5/12.):.1f} € → {new_fee_5_simple/12.:.1f} €', 
+                    direction='increase',
+                    caption=f'{(new_fee_5_simple-old_fee_5)/12.:.1f} € monthly increase', 
+                    bordered=True
+                ), 
+                mo.stat(
+                    label='6 240L | 2x monthly pickup',
+                    value=f'{(old_fee_6/12.):.1f} € → {new_fee_6_simple/12.:.1f} €', 
+                    direction='increase',
+                    caption=f'{(new_fee_6_simple-old_fee_6)/12.:.1f} € monthly increase', 
+                    bordered=True
+                )
+                , 
+                mo.stat(
+                    label='7 1100L | 2x weekly pickup',
+                    value=f'{(old_fee_7/12.):.1f} € → {new_fee_7_simple/12.:.1f} €', 
+                    direction='increase',
+                    caption=f'{(new_fee_7_simple-old_fee_7)/12.:.1f} € monthly increase', 
+                    bordered=True
+                )
+            ]),
+            mo.vstack([
+                mo.md('#### Stepped setup'),
+                mo.stat(
+                    label='5 120L | 2x monthly pickup',
+                    value=f'{(old_fee_5/12.):.1f} € → {new_fee_5_step/12.:.1f} €', 
+                    direction='increase',
+                    caption=f'{(new_fee_5_step-old_fee_5)/12.:.1f} € monthly increase', 
+                    bordered=True
+                ), 
+                mo.stat(
+                    label='6 240L | 2x monthly pickup',
+                    value=f'{(old_fee_6/12.):.1f} € → {new_fee_6_step/12.:.1f} €', 
+                    direction='increase',
+                    caption=f'{(new_fee_6_step-old_fee_6)/12.:.1f} € monthly increase', 
+                    bordered=True
+                )
+                , 
+                mo.stat(
+                    label='7 1100L | 2x weekly pickup',
+                    value=f'{(old_fee_7/12.):.1f} € → {new_fee_7_step/12.:.1f} €', 
+                    direction='increase',
+                    caption=f'{(new_fee_7_step-old_fee_7)/12.:.1f} € monthly increase', 
+                    bordered=True
+                )
+            ])
         ])
     ])
     return
@@ -390,6 +453,22 @@ def _(
     old_fee_4 = _coop_baseline['FeePerBin'].values[3] / 60.
     new_fee_4_simple = old_fee_4 * coop_fee_hike_simple
     new_fee_4_step = old_fee_4 * coop_fee_hike_step
+
+    ## 5 120L bin, 2x monthly
+    old_fee_5 = ind_old_fees[1][0]
+    new_fee_5_simple = old_fee_5 * ind_fee_hike_simple
+    new_fee_5_step = old_fee_5 * ind_fee_hike_step
+
+    ## 6 240L bin, 2x monthly
+    old_fee_6 = ind_old_fees[3][0]
+    new_fee_6_simple = old_fee_6 * ind_fee_hike_simple
+    new_fee_6_step = old_fee_6 * ind_fee_hike_step
+
+    ## 7 1100L Bin, 2x weekly
+    old_fee_7 = _coop_baseline['FeePerBin'].values[2]
+    new_fee_7_simple = old_fee_7 * coop_fee_hike_simple
+    new_fee_7_step = old_fee_7  * coop_fee_hike_step
+
     return (
         new_fee_1_simple,
         new_fee_1_step,
@@ -399,10 +478,19 @@ def _(
         new_fee_3_step,
         new_fee_4_simple,
         new_fee_4_step,
+        new_fee_5_simple,
+        new_fee_5_step,
+        new_fee_6_simple,
+        new_fee_6_step,
+        new_fee_7_simple,
+        new_fee_7_step,
         old_fee_1,
         old_fee_2,
         old_fee_3,
         old_fee_4,
+        old_fee_5,
+        old_fee_6,
+        old_fee_7,
     )
 
 
