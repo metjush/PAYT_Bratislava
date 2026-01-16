@@ -55,6 +55,8 @@ def _(np, olo_data, pd):
     _last_year = OLO_base['year'].max()
     end_of_forecast = 2041
 
+    forecasted_olos = []
+
     for y in range(_last_year + 1, end_of_forecast):
         _new_row = {
             'year': y
@@ -65,10 +67,11 @@ def _(np, olo_data, pd):
             _olo_min = OLO_base[col].values[0]
             _olo_max = OLO_base[col].values[-1]
             _olo_rate_of_growth = np.power((_olo_max / _olo_min), 1/_olo_years)
-
             _new_row[col] = _olo_max * _olo_rate_of_growth 
 
-        OLO_base = pd.concat([OLO_base, pd.DataFrame(_new_row, index=[0])], ignore_index=True)
+        forecasted_olos.append(pd.DataFrame(_new_row, index=[0]))
+
+    OLO_base = pd.concat([OLO_base] + forecasted_olos , ignore_index=True)
     return OLO_base, end_of_forecast
 
 
@@ -290,7 +293,7 @@ def _(mo, pd):
     )
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(
     mo,
     new_fee_1_simple,
@@ -494,7 +497,6 @@ def _(
     old_fee_7 = _coop_baseline['FeePerBin'].values[2]
     new_fee_7_simple = old_fee_7 * coop_fee_hike_simple
     new_fee_7_step = old_fee_7  * coop_fee_hike_step
-
     return (
         new_fee_1_simple,
         new_fee_1_step,
