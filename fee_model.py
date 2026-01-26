@@ -575,8 +575,6 @@ def _(export_button, mo, results_together):
 def _(OLO_base, organic_waste_pickup):
     def update_organic(cost_df):
         organic_schedule = organic_waste_pickup.value
-        if organic_schedule == 0:
-            return cost_df
         if organic_schedule == 1: # 2x week even in winter 
             """
             Now we have 2x week from Apr to November = 35 weeks = 70 pickups 
@@ -586,8 +584,7 @@ def _(OLO_base, organic_waste_pickup):
             Cost increase is 104/87
             """
             cost_df['Organic waste collection'] = cost_df['Organic waste collection'] * (104./87.)
-            return cost_df 
-        if organic_schedule == 2: # 1x week all year
+        elif organic_schedule == 2: # 1x week all year
             """
             Now we have 2x week from Apr to November = 35 weeks = 70 pickups 
             1x week from Dec to Mar = 17 weeks = 17 pickups 
@@ -596,16 +593,20 @@ def _(OLO_base, organic_waste_pickup):
             Cost fall is 52/87
             """
             cost_df['Organic waste collection'] = cost_df['Organic waste collection'] * (52./87.)
-            return cost_df 
-        return cost_df 
+        cost_df['1 OLO'] = cost_df.drop(columns=['year']).sum(axis=1)
+        cost_df['Period'] = cost_df.year - 2025
+        return cost_df.query('year > 2024')
 
 
 
-    OLO = update_organic(OLO_base)
-    OLO['1 OLO'] = OLO.drop(columns=['year']).sum(axis=1)
-    OLO['Period'] = OLO['year'] - 2025
-    OLO = OLO.query('year > 2024')
+    OLO = update_organic(OLO_base.copy())
     return (OLO,)
+
+
+@app.cell
+def _(OLO):
+    OLO
+    return
 
 
 @app.cell(hide_code=True)
