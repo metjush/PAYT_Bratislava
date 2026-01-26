@@ -101,30 +101,30 @@ def _(OLO_base, end_of_forecast, np, pd, yard_data, yard_takeover):
 def _(mo):
     mo.md(
         r"""
-    # Simulation of PAYT reform
+    # Modelovanie zmien v poplatkoch za komunálny odpad
 
-    In this notebook we can simulate impacts of waste collection reforms on tax revenue and expenditures of OLO. 
-    We will adjust different parameters to show the expected evolution of key indicators in various scenarios. Since we have little available past data on how people in Bratislava respond to changes in waste collection, we need to model different scenarios to show a potential range of outcomes. 
+    V tomto modeli je možné simulovať dopady zmien v oblasti zberu a poplatkov za komunálny odpad na výnos z poplatkov a náklady OLO. Zmenou rôznych vstupov, predpokladov a parametrov je možné modelovať očakávaný vývoj výnosov a nákladov v rôznych scenároch. Keďže množstvo dát z minulosti o reakcii obyvateľstva Bratislavy na zmeny v zbere odpadu, modelujeme viacere scenáre a ukazujeme tak rozsah možného vývoja. 
 
-    **There are general assumptions you can setup:**
+    **Toto sú predpoklady, ktoré je možné meniť:**
 
-    1. Annual rate of growth for fee collection. Default is `1.5%` per year. This represents new construction and more people moving in to the city.
-    2. Share of individual bins that are filled to capacity. Default is `53%`. This reflects latest results from a study of individual homes. This impacts how many people move to larger bins.
-    3. Assumption for how much more expensive OLO is compared to local yards. Default is `1.5x`. This reflects that when local districts handle waste, they usually choose cheaper options.
-    4. Whether OLO should take over local waste collection yards. If yes, the collection costs are added to costs of OLO. You can choose between taking over only proper collection yards or all collection points.
-    5. Behavioral scenario (see below). Total results show results for all scenarios.
-    6. Baseline value for other expenses covered by the waste fees.
-    7. Frequency of pickup of organic waste:
+    1. Ročné tempo rastu výnosov z poplatku. Východisko je `1,5 %` ročne. Tento nárast vychádza z historického vývoja a reflektuje novú výstavbu a sťahovanie ľudí do mesta.
+    2. Podiel nádob v rodinných domoch, ktoré sú plné. Východisko je `53 %`. Toto vychádza z posledných výsledkov prieskumu o naplnenosti nádob. Táto hodnota má dopad na to, koľko ľudí v reakcii na zmenu poplatkov zmení veľkosť nádoby. 
+    3. Rozdiel v nákladoch OLO oproti zberným dvorom, prevádzkovaných mestskými časťami. Východisko je `1,5x`. Toto odráža fakt, že keď mestské časti prevádzkujú zberné dvory, volia si lacnejšie možnosti. 
+    4. Či má OLO prevziať odvoz odpadu z miestnych zberných dvorov. Ak áno, náklady na tento zvoz sú zahrnuté v nákladoch OLO. Môžete si vybrať medzi prevzatím zberných dvorov alebo aj zberných miest. 
+    5. Behaviorálne scenáre (viď nižšie). Celkové výsledky modelu ukazujú výsledky pre všetky tri scenáre. 
+    6. Východisková hodnota nákladov na ostatné aktivity spojené s nakladaním s odpadmi, ktoré sú hradené z poplatku, ale nie sú realizované OLO. 
+    7. Frekvencia zvozu kuchynského odpadu:
 
-    **Organic waste collection:** 
+    **Zvoz kuchynského odpadu:** 
 
-    Currently organic waste is picked up 2x/week between April and November. During winter, this happens 1x/week. 
-    This is the `Default` option. You can change this to: 
+    Dnes sa kuchynský odpad zváža 2x týždenne medzi aprílom a novembrom. Počas zimy sa zváža 1x za týždeň.
 
-    1. 2x/week all year. This is assumed to increase the number of pickups from 87 to 104 and therefore increase costs by `~19.5%`.
-    2. 1x/week all year. This is assumed to decrease the number of pickups from 87 to 52 and therefore lower costs by `~40%`.
+    Toto je možnosť `Súčaný stav`. Zmeniť je ju možné na: 
 
-    The impact will be shown on the expenditure side, in the `1 OLO` line item.
+    1. 2x/týždenne po celý rok. Toto zvýši počet zvozov z 87 na 104 a teda zvýši náklady približne o `19,5%`.
+    2. 1x/týždenne po celý rok. Toto zníži počet zvozov z 87 na 52 a teda zníži náklady približne o `40%`.
+
+    Dopad bude viditeľný na strane nákladov, v položke `1 OLO`.
 
     **Here you can set up the simulation:**
 
@@ -560,13 +560,65 @@ def _(alt, mo, organic_waste_pickup, results_overview):
 
 
 @app.cell
-def _(export_button, mo, results_together):
+def _(
+    average_bin_fullness,
+    coop_setup_editor,
+    fee_hike,
+    fee_hike_coop,
+    global_fee_growth,
+    ind_setup_editor,
+    olo_multiplier,
+    organic_waste_pickup,
+    other_cost_baseline,
+    pd,
+    persons_per_bin_coop,
+    remove_weekly,
+    scenario_selector,
+    yard_takeover,
+):
+    def results_for_export(results_frame: pd.DataFrame) -> pd.DataFrame:
+
+        cols = results_frame.columns
+        buffer = [pd.NA] * len(cols)
+        footer = [
+            buffer,
+            buffer, 
+            ['-- POUZITE PREDPOKLADY --'] + [pd.NA] * (len(cols)-1),
+            ['# Zmeny sadzieb pre jednoduchy model '] + [pd.NA] * (len(cols)-1),
+            ['## IBV:', f'+{fee_hike.value} % | {"Bez tyzdenneho zvozu" if remove_weekly.value else "Tyzdenny zvoz"}'] + [pd.NA] * (len(cols)-2),
+            ['## PO/BD:', f'+{fee_hike_coop.value} % | {persons_per_bin_coop.value} ludi na nadobu']+ [pd.NA] * (len(cols)-2),
+            buffer,
+            ['# Zmeny sadzieb pre krokovy model '] + [pd.NA] * (len(cols)-1),
+            ['## IBV:'] + [pd.NA] * (len(cols)-1),
+            [ind_setup_editor.value.to_string()] + [pd.NA] * (len(cols)-1),
+            ['## PO/BD:'] + [pd.NA] * (len(cols)-1),
+            [coop_setup_editor.value.to_string()] + [pd.NA] * (len(cols)-1),
+            buffer,
+            ['# Predpoklady pre tieto vysledky: '] + [pd.NA] * (len(cols)-1),
+            ['## Scenar spravania ludi:', scenario_selector.selected_key] + [pd.NA] * (len(cols)-2),
+            ['## Frekvencia odvozu kuchynskeho odpadu:', organic_waste_pickup.selected_key] + [pd.NA] * (len(cols)-2),
+            ['## OLO prebera:', yard_takeover.selected_key] + [pd.NA] * (len(cols)-2),
+            ['## Tempo rastu vynosov:', f'{global_fee_growth.value} %'] + [pd.NA] * (len(cols)-2),
+            ['## Pocet nadob, ktore su plne:', f'{average_bin_fullness.value} %'] + [pd.NA] * (len(cols)-2),
+            ['## O kolko je OLO drahsie pri zbernych dvoroch:', f'{olo_multiplier.value} %'] + [pd.NA] * (len(cols)-2),
+            ['## Ostatne naklady spojene s odpadom:', f'{other_cost_baseline.value:,.0f} EUR'] + [pd.NA] * (len(cols)-2)
+        ]
+
+        footer_df = pd.DataFrame(columns=cols, data=footer)
+
+        return pd.concat([results_frame, footer_df], ignore_index=True)
+    return (results_for_export,)
+
+
+@app.cell
+def _(export_button, mo, results_for_export, results_together):
     mo.stop(not export_button.value)
+    export_results = results_for_export(results_together)
     mo.vstack([
         mo.md('### Data from total results chart to export'),
         mo.md('You can press *Download* under the table to export your data to CSV to be used in Excel'),
         mo.md('Charts can be saved by clicking the ... button in the corner of the chart as an image'),
-        results_together
+        export_results
     ])
     return
 
@@ -601,12 +653,6 @@ def _(OLO_base, organic_waste_pickup):
 
     OLO = update_organic(OLO_base.copy())
     return (OLO,)
-
-
-@app.cell
-def _(OLO):
-    OLO
-    return
 
 
 @app.cell(hide_code=True)
