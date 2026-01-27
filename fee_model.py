@@ -126,13 +126,13 @@ def _(mo):
 
     Dopad bude viditeľný na strane nákladov, v položke `1 OLO`.
 
-    **Here you can set up the simulation:**
+    **Samotná simulácia dopadov sa nastavuje nasledovnými možnosťami:**
 
-    1. Increase in fees (in %)
-    2. Removing / adding options of collection schedules
-    3. Number of people per large 1,100L bin
+    1. Zvýšenie sadzby poplatku (v %)
+    2. Zmena v možnostiach frekvencie zvozu
+    3. Počet obyvateľov na veľkú nádobu 1 100l
 
-    You can also adjust the assumed cost of OLO to the city by uploading a new Excel file with updated data. Upon changing the table, results will be automatically updated. The Excel file should contain the following values:
+    Taktiež je možné upraviť očakávané náklady OLO pre mesto, nahratím nového Excel súboru s aktualizovanými dátami. Výsledky sa automaticky aktualizujú. Excel súbor by mal obsahovať nasledovné hodnoty/štruktúru:
 
     | Rok | 2024 | 2025 | 2026 | 2027 | 2028 | 2029 | 2030 |
     |-----|------|------|------|------|------|------|------|
@@ -143,21 +143,21 @@ def _(mo):
     |Organic waste collection|
     |Collection yards/points|
 
-    The simulation is parametrized differently for individual homes and differently for businesses/coops. This is because the assumption is that these groups respond differently to fee increases. While individual home owners can respond by frequency changes only (usually only have on bin), coops and businesses mostly adjust the number of bins, and only if this is not an option do they drop frequencies. 
+    Simulácia sa nastavuje odlišne samostatne pre individuálnu bytovú výstavbu (rodinné domy) a samostatne pre bytové domy a podnikateľské subjekty. To je z toho dôvodu, že tieto skupiny reagujú odlišne na zmenu sadzieb. Zatiaľ čo pri IBV môžu občania meniť frekvenciu zvozu (štandardne majú len jednu nádobu), PO a bytové domy menia primárne počet nádob, zvozy sa upravujú iba v prípade, že nie je možné meniť počet nádob. 
 
-    You can setup a simple model (one % fee increase) or a stepped model where we can schedule several adjustments to fees over time.
+    Nastaviť môžete jednoduchý model (jednorazové zvýšenie poplatku v %) alebo komplexnejší krokový model, v ktorom je možné naplánovať viacero zmien v poplatkoch v čase.
 
-    ## Sensitivity settings (behavioral response)
+    ## Citlivostná analýza (zmena správania)
 
-    The default model assumes a behavioral response to the changes in fees and other conditions that is most consistent with past trends. This data is very limited, and so we need to model different scenarios of how people might react to policy changes. 
+    Štandardný model predpokladá zmenu správania v reakcií na zmenu v poplatkoch a iných podmienkach odvozu odpadu. Táto zmena je modelovaná na základe vývoja po ostatnej zmene sadzieb. Keďže sú však dáta relatívne obmedzené, pracujeme s viacerými scenármi behaviorálnych reakcií na zmeny politík.
 
-    You can choose these following scenarios to simulate:
+    Simulovať je možné nasledovné scenáre spreávania: 
 
-    1. **No behavioral change**: This scenario assumes no behavioral changes to an increase in fees. The only reaction that is required is when the weekly schedule is disabled. This will lead to a transfer of all households with a weekly schedule to a fortnightly schedule with the larger bin.
-    2. **Standard response**: This is the default scenario that mostly follows an extrapolation of what was observed after the last change to the fee structure. It assumes a fairly muted behavioral response to an increase in fees. However, the capacity of households to bear higher fees is assumed to fall with greater increases (even when you stagger them in multiple steps).
-    3. **Strong response**: This is a scenario where we assume that compared to 2023, the financial situation of households has worsened (following inflation and increases in other national taxes). Therefore the reaction to a higher waste fee will be more pronounced this time.
-
-    In the results, we also show a scenario of **No Policy Change**. That is, a scenario without changes to fees or other reforms that would affect revenues.
+    1. **Bez zmeny správania**: Tento scenár nepredpokladá žiadne zmeny správania po zmene sadzieb. Jediná nevyhnutná zmena nastáva, keď je zrušená zmena týždenného zvozu v IBV. Toto spôsobí presun domácností na dvojtýždennu frekvenciu s väčšou nádobou (240l).
+    2. **Štandardná odozva**: Toto je východiskový scenár, ktorý z veľkej časti vychádza z extrapolácie toho, čo nastalo po ostatnej zmene poplatkov. Predpokladá relatívne miernu odozvu z hľadiska zmeny intervalov či počtu nádob. Avšak kapacita domácnosti znášať vyššie poplatky klesá s narastajúcimi poplatkami (aj v prípade rozdelenia zvýšenia do viacerých krokov).
+    3. **Výrazná odozva**: V tomto scenári predpokladáme, že oproti roku 2023 sa finančná situácia domácností zhoršila (kvôli inflácii a zvýšeniu iných daní). Reakcia na vyššie poplatky tak bude v tomto prípade výraznejšia.
+   
+    Vo výsledkoch taktiež ukazujeme aj scenár **bez zmeny politík**. Teda scenár, kedy sa nezmenia ani sadzby, ani možné intervaly. 
     """
     )
     return
@@ -185,44 +185,44 @@ def _(mo):
     olo_upload = mo.ui.file(filetypes=['.xls','.xlsx'], multiple=False, kind='button')
 
     mo.vstack([
-        mo.md('## Parameter setup'),
-        mo.md('### General assumptions and policy changes'),
+        mo.md('## Parametre modelu'),
+        mo.md('### Všeobecné predpoklady a zmeny politík'),
         mo.hstack([
             mo.vstack([
-                mo.md('**Annual rate of growth for fee collection (new construction, etc.) in %**'),
+                mo.md('**Ročné tempo rastu výnosov z poplatku (nová výstavba, atď.) v %**'),
                 global_fee_growth
             ]),
             mo.vstack([
-                mo.md('**Make OLO handle waste collection from local waste collection yards**'), 
+                mo.md('**Prevezme OLO odvoz odpadu z miestnych zberných dvorov?**'), 
                 yard_takeover
             ])]),
         mo.hstack([
             mo.vstack([
-                mo.md('**Share of individual bins that are filled to capacity in %**'), 
+                mo.md('**Podiel individuálnych nádob, ktoré sú plné, v %**'), 
                 average_bin_fullness
             ]),
             mo.vstack([
-                mo.md('**Behavioral scenario**'),
+                mo.md('**Scenáre správania**'),
                 scenario_selector
             ])
         ]),
         mo.hstack([
             mo.vstack([
-                mo.md('**Assumption for how much more expensive OLO is compared to local yards (multiplier)**'),
+                mo.md('**Predpoklad rozdielu v nákladoch medzi OLO a miestnych zberných dvorov (násobok)**'),
                 olo_multiplier
             ]),
             mo.vstack([
-                mo.md('**2024 value for other expenses covered by waste fees**'), 
+                mo.md('**Hodnota pre ostatné náklady, hradené z poplatku (pre rok 2024)**'), 
                 other_cost_baseline
             ])
         ]),
         mo.hstack([
             mo.vstack([
-                mo.md('**Organic waste pickup frequency**'),
+                mo.md('**Frekvencia zvozu kuchynského odpadu**'),
                 organic_waste_pickup
             ]), 
             mo.vstack([
-                mo.md('**Upload new OLO expenditure**'),
+                mo.md('**Nahrať nové náklady OLO**'),
                 olo_upload
             ])
         ])
@@ -319,123 +319,123 @@ def _(
     old_fee_7,
 ):
     mo.vstack([
-        mo.md('## Illustrations of monthly fee rises for current setup'),
-        mo.md('### Household modelling'),
+        mo.md('## Príklady mesačných nárastov poplatok pre aktuálne nastavený model'),
+        mo.md('### Domácnosti'),
         mo.hstack([
             mo.vstack([
-                mo.md('#### Simple setup'),
+                mo.md('#### Jednoduchý model'),
                 mo.stat(
-                    label='1 Individual home | Weekly pickup | 120L',
+                    label='1 IBV | Týždenný zvoz | 120l',
                     value=f'{(old_fee_1/12.):.1f} € → {new_fee_1_simple/12.:.1f} €', 
                     direction='increase',
-                    caption=f'{(new_fee_1_simple-old_fee_1)/12.:.1f} € monthly increase', 
+                    caption=f'{(new_fee_1_simple-old_fee_1)/12.:.1f} € mesačný nárast', 
                     bordered=True
                 ), 
                 mo.stat(
-                    label='2 Individual home | 2x monthly pickup | 120L',
+                    label='2 IBV | Zvoz 2x mesačne | 120l',
                     value=f'{(old_fee_2/12.):.1f} € → {new_fee_2_simple/12.:.1f} €', 
                     direction='increase',
-                    caption=f'{(new_fee_2_simple-old_fee_2)/12.:.1f} € monthly increase', 
+                    caption=f'{(new_fee_2_simple-old_fee_2)/12.:.1f} € mesačný nárast', 
                     bordered=True
                 )
                 , 
                 mo.stat(
-                    label='3 Block of flats | 2x weekly pickup | 1100L | 45 people per bin',
+                    label='3 Bytové domy | Zvoz 2x týždenne | 1100l | 45 ľudí na nádobu | 2 ľudia na domácnosť',
                     value=f'{(old_fee_3/12.):.1f} € → {new_fee_3_simple/12.:.1f} €', 
                     direction='increase',
-                    caption=f'{(new_fee_3_simple-old_fee_3)/12.:.1f} € monthly increase', 
+                    caption=f'{(new_fee_3_simple-old_fee_3)/12.:.1f} € mesačný nárast', 
                     bordered=True
                 ), 
                 mo.stat(
-                    label='4 Block of flats | 3x weekly pickup | 1100L | 60 people per bin',
+                    label='4 Bytové domy | Zvoz 3x týždenne | 1100l | 60 ľudí na nádobu | 2 ľudia na domácnosť',
                     value=f'{(old_fee_4/12.):.1f} € → {new_fee_4_simple/12.:.1f} €', 
                     direction='increase',
-                    caption=f'{(new_fee_4_simple-old_fee_4)/12.:.1f} € monthly increase', 
+                    caption=f'{(new_fee_4_simple-old_fee_4)/12.:.1f} € mesačný nárast', 
                     bordered=True
                 )
             ]),
             mo.vstack([
-                mo.md('#### Stepped setup'),
+                mo.md('#### Komplexný model'),
                 mo.stat(
-                    label='1 Individual home | Weekly pickup | 120L',
+                    label='1 IBV | Týždenný zvoz | 120l',
                     value=f'{(old_fee_1/12.):.1f} € → {new_fee_1_step/12.:.1f} €', 
                     direction='increase',
-                    caption=f'{(new_fee_1_step-old_fee_1)/12.:.1f} € monthly increase', 
+                    caption=f'{(new_fee_1_step-old_fee_1)/12.:.1f} € mesačný nárast', 
                     bordered=True
                 ), 
                 mo.stat(
-                    label='2 Individual home | 2x monthly pickup | 120L',
+                    label='2 IBV | Zvoz 2x mesačne | 120l',
                     value=f'{(old_fee_2/12.):.1f} € → {new_fee_2_step/12.:.1f} €', 
                     direction='increase',
-                    caption=f'{(new_fee_2_step-old_fee_2)/12.:.1f} € monthly increase', 
+                    caption=f'{(new_fee_2_step-old_fee_2)/12.:.1f} € mesačný nárast', 
                     bordered=True
                 )
                 , 
                 mo.stat(
-                    label='3 Block of flats | 2x weekly pickup | 1100L | 45 people per bin',
+                    label='3 Bytové domy | Zvoz 2x týždenne | 1100l | 45 ľudí na nádobu | 2 ľudia na domácnosť',
                     value=f'{(old_fee_3/12.):.1f} € → {new_fee_3_step/12.:.1f} €', 
                     direction='increase',
-                    caption=f'{(new_fee_3_step-old_fee_3)/12.:.1f} € monthly increase', 
+                    caption=f'{(new_fee_3_step-old_fee_3)/12.:.1f} € mesačný nárast', 
                     bordered=True
                 ), 
                 mo.stat(
-                    label='4 Block of flats | 3x weekly pickup | 1100L | 60 people per bin',
+                    label='4 Bytové domy | Zvoz 3x týždenne | 1100l | 60 ľudí na nádobu | 2 ľudia na domácnosť',
                     value=f'{(old_fee_4/12.):.1f} € → {new_fee_4_step/12.:.1f} €', 
                     direction='increase',
-                    caption=f'{(new_fee_4_step-old_fee_4)/12.:.1f} € monthly increase', 
+                    caption=f'{(new_fee_4_step-old_fee_4)/12.:.1f} € mesačný nárast', 
                     bordered=True
                 )
             ])
         ]),
-        mo.md('### Per-bin modelling'),
+        mo.md('### Nádoby'),
         mo.hstack([
             mo.vstack([
-                mo.md('#### Simple setup'),
+                mo.md('#### Jednoduchý model'),
                 mo.stat(
-                    label='5 120L | 2x monthly pickup',
+                    label='5 120l | Zvoz 2x mesačne',
                     value=f'{(old_fee_5/12.):.1f} € → {new_fee_5_simple/12.:.1f} €', 
                     direction='increase',
-                    caption=f'{(new_fee_5_simple-old_fee_5)/12.:.1f} € monthly increase', 
+                    caption=f'{(new_fee_5_simple-old_fee_5)/12.:.1f} € mesačný nárast', 
                     bordered=True
                 ), 
                 mo.stat(
-                    label='6 240L | 2x monthly pickup',
+                    label='6 240l | Zvoz 2x mesačne',
                     value=f'{(old_fee_6/12.):.1f} € → {new_fee_6_simple/12.:.1f} €', 
                     direction='increase',
-                    caption=f'{(new_fee_6_simple-old_fee_6)/12.:.1f} € monthly increase', 
+                    caption=f'{(new_fee_6_simple-old_fee_6)/12.:.1f} € mesačný nárast', 
                     bordered=True
                 )
                 , 
                 mo.stat(
-                    label='7 1100L | 2x weekly pickup',
+                    label='7 1100l | Zvoz 2x týždenne',
                     value=f'{(old_fee_7/12.):.1f} € → {new_fee_7_simple/12.:.1f} €', 
                     direction='increase',
-                    caption=f'{(new_fee_7_simple-old_fee_7)/12.:.1f} € monthly increase', 
+                    caption=f'{(new_fee_7_simple-old_fee_7)/12.:.1f} € mesačný nárast', 
                     bordered=True
                 )
             ]),
             mo.vstack([
-                mo.md('#### Stepped setup'),
+                mo.md('#### Komplexný model'),
                 mo.stat(
-                    label='5 120L | 2x monthly pickup',
+                    label='5 120l | Zvoz 2x mesačne',
                     value=f'{(old_fee_5/12.):.1f} € → {new_fee_5_step/12.:.1f} €', 
                     direction='increase',
-                    caption=f'{(new_fee_5_step-old_fee_5)/12.:.1f} € monthly increase', 
+                    caption=f'{(new_fee_5_step-old_fee_5)/12.:.1f} € mesačný nárast', 
                     bordered=True
                 ), 
                 mo.stat(
-                    label='6 240L | 2x monthly pickup',
+                    label='6 240l | Zvoz 2x mesačne',
                     value=f'{(old_fee_6/12.):.1f} € → {new_fee_6_step/12.:.1f} €', 
                     direction='increase',
-                    caption=f'{(new_fee_6_step-old_fee_6)/12.:.1f} € monthly increase', 
+                    caption=f'{(new_fee_6_step-old_fee_6)/12.:.1f} € mesačný nárast', 
                     bordered=True
                 )
                 , 
                 mo.stat(
-                    label='7 1100L | 2x weekly pickup',
+                    label='7 1100l | Zvoz 2x týždenne',
                     value=f'{(old_fee_7/12.):.1f} € → {new_fee_7_step/12.:.1f} €', 
                     direction='increase',
-                    caption=f'{(new_fee_7_step-old_fee_7)/12.:.1f} € monthly increase', 
+                    caption=f'{(new_fee_7_step-old_fee_7)/12.:.1f} € mesačný nárast', 
                     bordered=True
                 )
             ])
@@ -453,7 +453,7 @@ def _(
     ind_old_fees,
     ind_setup_editor,
 ):
-    # create model households
+     # create model households
     ind_fee_hike_simple = (1 + fee_hike.value/100.)
     ind_fee_hike_step = (1 + ind_setup_editor.value['Fee Hike'].div(100.)).product()
     ## 1 Individual household, 1x weekly 120L
@@ -474,12 +474,12 @@ def _(
     coop_fee_hike_simple = (1 + fee_hike_coop.value/100.)
     coop_fee_hike_step = (1 + coop_setup_editor.value['Fee Hike'].div(100.)).product()
     ## 3 Block of flats, 2x weekly 1100L, 45 people per bin 
-    old_fee_3 = _coop_baseline['FeePerBin'].values[2] / 45. 
+    old_fee_3 = _coop_baseline['FeePerBin'].values[2] / 45. * 2
     new_fee_3_simple = old_fee_3 * coop_fee_hike_simple
     new_fee_3_step = old_fee_3 * coop_fee_hike_step
 
     ## 4 Block of flats, 3x weekly 1100L, 60 people per bin
-    old_fee_4 = _coop_baseline['FeePerBin'].values[3] / 60.
+    old_fee_4 = _coop_baseline['FeePerBin'].values[3] / 60. * 2
     new_fee_4_simple = old_fee_4 * coop_fee_hike_simple
     new_fee_4_step = old_fee_4 * coop_fee_hike_step
 
@@ -532,7 +532,7 @@ def _(alt, mo, organic_waste_pickup, results_overview):
 
         _df = result_df.query('Model == @model')[['Period','Fee_forecast','Scenario']].copy()
         _exp_df = result_df.query('Model == @model and Scenario == "2 Standard Response"').drop(columns=['Fee_forecast','Bin_forecast','Scenario'])
-        _melt_exp = _exp_df.melt(id_vars=['Period'], value_vars=['1 OLO', '2 Other Expenses', '3 MC Share', '4 OLO Yards'], var_name='Category',value_name='Expenses').sort_values(by=['Category'], ascending=True)
+        _melt_exp = _exp_df.melt(id_vars=['Period'], value_vars=['1 OLO', '2 Other Expenses', '3 MC Share', '4 OLO Yards'], var_name='Kategória',value_name='Náklady').sort_values(by=['Kategória'], ascending=True)
 
         lines_chart = alt.Chart(_df).mark_trail().encode(alt.X('Period').axis(format='0d', 
                                                                              tickCount=_df.Period.max()), 
@@ -540,18 +540,18 @@ def _(alt, mo, organic_waste_pickup, results_overview):
                                             color=alt.Color('Scenario').scale(scheme='paired'))
 
         bar_chart = alt.Chart(_melt_exp).mark_bar(size=25).encode(alt.X('Period').axis(format='0d', 
-                                                                             tickCount=_df.Period.max()),y='Expenses',color='Category')
+                                                                             tickCount=_df.Period.max()),y='Náklady',color='Kategória')
 
         return lines_chart + bar_chart 
 
 
-    total_simple = mo.ui.altair_chart(summary_chart('Simple model', results_together), label=f"Total fee forecast per behavioral scenario (Simple | Organic Pickup: {organic_schedule})")
-    total_stepped = mo.ui.altair_chart(summary_chart('Stepped model', results_together), label=f"Total fee forecast per behavioral scenario (Stepped | Organic Pickup: {organic_schedule})")
+    total_simple = mo.ui.altair_chart(summary_chart('Simple model', results_together), label=f"Celkový odhad výnosov z poplatku pre každý scenár (Jednoduchý model | Kuchynský odpad: {organic_schedule})")
+    total_stepped = mo.ui.altair_chart(summary_chart('Stepped model', results_together), label=f"Celkový odhad výnosov z poplatku pre každý scenár (Komplexný model | Kuchynský odpad: {organic_schedule})")
 
-    export_button = mo.ui.run_button(label='Show data to export')
+    export_button = mo.ui.run_button(label='Exportovať dáta')
 
     mo.vstack([
-        mo.md('## Total results for all behavioral scenarios'),
+        mo.md('## Celkový výsledky pre všetky scenáre správania'),
         total_simple,
         total_stepped,
         export_button
@@ -615,9 +615,10 @@ def _(export_button, mo, results_for_export, results_together):
     mo.stop(not export_button.value)
     export_results = results_for_export(results_together)
     mo.vstack([
-        mo.md('### Data from total results chart to export'),
-        mo.md('You can press *Download* under the table to export your data to CSV to be used in Excel'),
-        mo.md('Charts can be saved by clicking the ... button in the corner of the chart as an image'),
+        mo.md('### Dáta z grafu na export'),
+        mo.md('Stlačením tlačidla *Download* pod tabuľkou exportujete dáta do CSV formátu, ktorý je možné použiť v Exceli'),
+        mo.md('Exportované dáta obsahujú aj zhrnutie použitých predpokladov'),
+        mo.md('Grafy môžu byť uložené stlačením tlačidla ... v rohu grafu ako obrázok'),
         export_results
     ])
     return
