@@ -93,7 +93,7 @@ def _(OLO_base, end_of_forecast, np, pd, yard_data, yard_takeover):
         }
         yard_total = pd.concat([yard_total, pd.DataFrame(_new_row, index=[0])], ignore_index=True)
 
-    yard_total['Period'] = yard_total['year'] - 2025
+    yard_total['Rok'] = yard_total['year'] - 2025
     return (yard_total,)
 
 
@@ -156,8 +156,8 @@ def _(mo):
     1. **Bez zmeny správania**: Tento scenár nepredpokladá žiadne zmeny správania po zmene sadzieb. Jediná nevyhnutná zmena nastáva, keď je zrušená zmena týždenného zvozu v IBV. Toto spôsobí presun domácností na dvojtýždennu frekvenciu s väčšou nádobou (240l).
     2. **Štandardná odozva**: Toto je východiskový scenár, ktorý z veľkej časti vychádza z extrapolácie toho, čo nastalo po ostatnej zmene poplatkov. Predpokladá relatívne miernu odozvu z hľadiska zmeny intervalov či počtu nádob. Avšak kapacita domácnosti znášať vyššie poplatky klesá s narastajúcimi poplatkami (aj v prípade rozdelenia zvýšenia do viacerých krokov).
     3. **Výrazná odozva**: V tomto scenári predpokladáme, že oproti roku 2023 sa finančná situácia domácností zhoršila (kvôli inflácii a zvýšeniu iných daní). Reakcia na vyššie poplatky tak bude v tomto prípade výraznejšia.
-   
-    Vo výsledkoch taktiež ukazujeme aj scenár **bez zmeny politík**. Teda scenár, kedy sa nezmenia ani sadzby, ani možné intervaly. 
+
+    Vo výsledkoch taktiež ukazujeme aj scenár **bez zmeny politík**. Teda scenár, kedy sa nezmenia ani sadzby, ani možné intervaly.
     """
     )
     return
@@ -168,19 +168,19 @@ def _(mo):
     # parametrize rate of growth for fees BAU, waste collection yards...
 
     global_fee_growth = mo.ui.slider(0, 10, 0.1, include_input=True, show_value=True, value=1.5)
-    yard_takeover = mo.ui.dropdown(options = {'0 No': 0, '1 Only Proper Waste Yards': 1, '2 All Yards and Collection Points': 2}, allow_select_none=False, searchable=True, value='0 No')
+    yard_takeover = mo.ui.dropdown(options = {'0 Nie': 0, '1 Iba riadne zberné dvory': 1, '2 Všetky zberné dvory a miesta': 2}, allow_select_none=False, searchable=True, value='0 Nie')
     average_bin_fullness = mo.ui.slider(0,100,show_value=True, include_input=True, value=53)
-    scenario_selector = mo.ui.dropdown(options = {'1 No Change': 3, '2 Standard Response': 1, '3 Strong Response': 2},
+    scenario_selector = mo.ui.dropdown(options = {'1 Bez zmeny správania': 3, '2 Štandardná odozva': 1, '3 Výrazná odozva': 2},
                                        allow_select_none=False,
                                        searchable=True, 
-                                       value='2 Standard Response'
+                                       value='2 Štandardná odozva'
                                       )
 
     other_cost_baseline = mo.ui.number(start=0, value=1070384)
     olo_multiplier = mo.ui.slider(0,10,0.1, include_input=True, show_value=True, value=1.5)
-    organic_waste_pickup = mo.ui.dropdown(options = {'Default': 0, '2x/week': 1, '1x/week': 2},
+    organic_waste_pickup = mo.ui.dropdown(options = {'Súčasná frekvencia': 0, '2x/týždeň': 1, '1x/týždeň': 2},
                                           allow_select_none=False,
-                                         value='Default')
+                                         value='Súčasná frekvencia')
 
     olo_upload = mo.ui.file(filetypes=['.xls','.xlsx'], multiple=False, kind='button')
 
@@ -250,17 +250,17 @@ def _(mo, pd):
     remove_weekly = mo.ui.checkbox()
     forecast_periods = mo.ui.slider(0,20, show_value=True, include_input=True, value=5)
 
-    ind_setup_df = pd.DataFrame(columns=['Fee Hike','Year Gap','Maximum 14d Interval'], data=[[30,5,False]])
+    ind_setup_df = pd.DataFrame(columns=['Nárast poplatku v %','Odstup v rokoch','Maximálne 14d interval'], data=[[30,5,False]])
     ind_setup_editor = mo.ui.data_editor(data=ind_setup_df)
 
 
     mo.vstack([
-        mo.md('### Individual homes (simple setup)'),
-        mo.hstack([mo.md('**1 Increase in standard fee in %**'), fee_hike], align='center'),
-        mo.hstack([mo.md('**2 Force a maximum 14d interval for individual homes**'), remove_weekly],  align='center'),
-        mo.hstack([mo.md('**3 Number of years to forecast**'), forecast_periods], align='center'),
-        mo.md('### Individual homes (complex setup)'),
-        mo.md('In this table, you can add multiple rows as steps in gradual fee increase / change'),
+        mo.md('### IBV (jednoduchý model)'),
+        mo.hstack([mo.md('**1 Zvýšenie základného poplatku o %**'), fee_hike], align='center'),
+        mo.hstack([mo.md('**2 Maximálna frekvencia 2x mesiac**'), remove_weekly],  align='center'),
+        mo.hstack([mo.md('**3 Počet rokov prognózy**'), forecast_periods], align='center'),
+        mo.md('### IBV (komplexný model)'),
+        mo.md('V tejto tabuľke môžete pridávať riadky ako kroky v postupných zmenách poplatkov'),
         ind_setup_editor
 
     ])
@@ -269,20 +269,19 @@ def _(mo, pd):
 
 @app.cell(hide_code=True)
 def _(mo, pd):
-
     fee_hike_coop = mo.ui.slider(0,100, show_value=True, include_input=True, value=30)
     persons_per_bin_coop = mo.ui.slider(45,200,show_value=True, include_input=True, value=45)
     forecast_periods_coop = mo.ui.slider(0,20, show_value=True, include_input=True, value=5)
 
-    coop_setup_df = pd.DataFrame(columns=['Fee Hike','Number of people per bin','Year Gap'], data=[[30,45,5]])
+    coop_setup_df = pd.DataFrame(columns=['Nárast poplatku v %','Počet ľudí na nádobu','Odstup v rokoch'], data=[[30,45,5]])
     coop_setup_editor = mo.ui.data_editor(data=coop_setup_df)
 
     mo.vstack([
-         mo.md('### Coops/businesses (simple setup)'),
-        mo.hstack([mo.md('**1 Increase in standard fee in %**'), fee_hike_coop], align='center'),
-        mo.hstack([mo.md('**2 Number of people per 1110l bin**'), persons_per_bin_coop], align='center'),
-        mo.hstack([mo.md('**3 Number of years to forecast**'), forecast_periods_coop], align='center'),
-        mo.md('### Coops/businesses (complex setup)'),
+         mo.md('### BD a PO (jednoduchý model)'),
+        mo.hstack([mo.md('**1 Zvýšenie základného poplatku o %**'), fee_hike_coop], align='center'),
+        mo.hstack([mo.md('**2 Počet obyvateľov na 1 110l nádobu**'), persons_per_bin_coop], align='center'),
+        mo.hstack([mo.md('**3 Počet rokov prognózy**'), forecast_periods_coop], align='center'),
+        mo.md('### BD a PO (komplexný model)'),
         coop_setup_editor
     ])
     return (
@@ -453,9 +452,9 @@ def _(
     ind_old_fees,
     ind_setup_editor,
 ):
-     # create model households
+    # create model households
     ind_fee_hike_simple = (1 + fee_hike.value/100.)
-    ind_fee_hike_step = (1 + ind_setup_editor.value['Fee Hike'].div(100.)).product()
+    ind_fee_hike_step = (1 + ind_setup_editor.value['Nárast poplatku v %'].div(100.)).product()
     ## 1 Individual household, 1x weekly 120L
     old_fee_1 = ind_old_fees[2][0]
     new_fee_1_simple = old_fee_1 * ind_fee_hike_simple
@@ -472,7 +471,7 @@ def _(
     _coop_baseline['FeePerPoint'] = _coop_baseline.FeePerBin.multiply(_coop_baseline.BinPerPoint)
 
     coop_fee_hike_simple = (1 + fee_hike_coop.value/100.)
-    coop_fee_hike_step = (1 + coop_setup_editor.value['Fee Hike'].div(100.)).product()
+    coop_fee_hike_step = (1 + coop_setup_editor.value['Nárast poplatku v %'].div(100.)).product()
     ## 3 Block of flats, 2x weekly 1100L, 45 people per bin 
     old_fee_3 = _coop_baseline['FeePerBin'].values[2] / 45. * 2
     new_fee_3_simple = old_fee_3 * coop_fee_hike_simple
@@ -530,23 +529,23 @@ def _(alt, mo, organic_waste_pickup, results_overview):
 
     def summary_chart(model, result_df):
 
-        _df = result_df.query('Model == @model')[['Period','Fee_forecast','Scenario']].copy()
-        _exp_df = result_df.query('Model == @model and Scenario == "2 Standard Response"').drop(columns=['Fee_forecast','Bin_forecast','Scenario'])
-        _melt_exp = _exp_df.melt(id_vars=['Period'], value_vars=['1 OLO', '2 Other Expenses', '3 MC Share', '4 OLO Yards'], var_name='Kategória',value_name='Náklady').sort_values(by=['Kategória'], ascending=True)
+        _df = result_df.query('Model == @model')[['Rok','Fee_forecast','Scenár']].copy()
+        _exp_df = result_df.query('Model == @model and Scenár == "2 Štandardná odozva"').drop(columns=['Fee_forecast','Bin_forecast','Scenár'])
+        _melt_exp = _exp_df.melt(id_vars=['Rok'], value_vars=['1 OLO', '2 Ostatné náklady', '3 Podiel MČ', '4 OLO Zberné dvory'], var_name='Kategória',value_name='Náklady').sort_values(by=['Kategória'], ascending=True)
 
-        lines_chart = alt.Chart(_df).mark_trail().encode(alt.X('Period').axis(format='0d', 
-                                                                             tickCount=_df.Period.max()), 
+        lines_chart = alt.Chart(_df).mark_trail().encode(alt.X('Rok').axis(format='0d', 
+                                                                             tickCount=_df.Rok.max()), 
                                                          y='Fee_forecast',
-                                            color=alt.Color('Scenario').scale(scheme='paired'))
+                                            color=alt.Color('Scenár').scale(scheme='paired'))
 
-        bar_chart = alt.Chart(_melt_exp).mark_bar(size=25).encode(alt.X('Period').axis(format='0d', 
-                                                                             tickCount=_df.Period.max()),y='Náklady',color='Kategória')
+        bar_chart = alt.Chart(_melt_exp).mark_bar(size=25).encode(alt.X('Rok').axis(format='0d', 
+                                                                             tickCount=_df.Rok.max()),y='Náklady',color='Kategória')
 
         return lines_chart + bar_chart 
 
 
-    total_simple = mo.ui.altair_chart(summary_chart('Simple model', results_together), label=f"Celkový odhad výnosov z poplatku pre každý scenár (Jednoduchý model | Kuchynský odpad: {organic_schedule})")
-    total_stepped = mo.ui.altair_chart(summary_chart('Stepped model', results_together), label=f"Celkový odhad výnosov z poplatku pre každý scenár (Komplexný model | Kuchynský odpad: {organic_schedule})")
+    total_simple = mo.ui.altair_chart(summary_chart('Jednoduchý model', results_together), label=f"Celkový odhad výnosov z poplatku pre každý scenár (Jednoduchý model | Kuchynský odpad: {organic_schedule})")
+    total_stepped = mo.ui.altair_chart(summary_chart('Komplexný model', results_together), label=f"Celkový odhad výnosov z poplatku pre každý scenár (Komplexný model | Kuchynský odpad: {organic_schedule})")
 
     export_button = mo.ui.run_button(label='Exportovať dáta')
 
@@ -647,7 +646,7 @@ def _(OLO_base, organic_waste_pickup):
             """
             cost_df['Organic waste collection'] = cost_df['Organic waste collection'] * (52./87.)
         cost_df['1 OLO'] = cost_df.drop(columns=['year']).sum(axis=1)
-        cost_df['Period'] = cost_df.year - 2025
+        cost_df['Rok'] = cost_df.year - 2025
         return cost_df.query('year > 2024')
 
 
@@ -664,43 +663,43 @@ def _(scenario_selector):
 
 @app.cell(hide_code=True)
 def _(coop_results_, ind_df_results, pd):
-    results_summary = ind_df_results.query('Period < 2').copy().rename(columns={'Individual payers fees': 'Fees', 'Individual bin count': 'Bins'})
-    results_summary['Payer'] = 'Individual'
+    results_summary = ind_df_results.query('Rok < 2').copy().rename(columns={'Individual payers fees': 'Výnos z poplatku', 'Individual bin count': 'Počet nádob'})
+    results_summary['Platiteľ'] = 'IBV'
 
-    _coop_period1 = coop_results_.query('Period < 2').copy().rename(columns={'Coop fees': 'Fees', 'Coop bin count': 'Bins'})
-    _coop_period1['Payer'] = 'Coop'
+    _coop_period1 = coop_results_.query('Rok < 2').copy().rename(columns={'Coop fees': 'Výnos z poplatku', 'Coop bin count': 'Počet nádob'})
+    _coop_period1['Platiteľ'] = 'BD a PO'
 
     results_summary = pd.concat([results_summary, _coop_period1], ignore_index=True)
-    results_summary["Period"] = results_summary["Period"].astype(str).str.replace('0','0: Before Change').str.replace('1','1: First year after change')
+    results_summary["Rok"] = results_summary["Rok"].astype(str).str.replace('0','0: Pred zmenou').str.replace('1','1: Prvý rok po zmene')
     return (results_summary,)
 
 
 @app.cell(hide_code=True)
 def _(coop_results_, ind_df_results, mo, pd, results_summary):
-    last_period_ind = ind_df_results.groupby(['Scenario'], as_index=False)['Period'].max()
-    last_period_coop = coop_results_.groupby(['Scenario'], as_index=False)['Period'].max()
+    last_period_ind = ind_df_results.groupby(['Scenár'], as_index=False)['Rok'].max()
+    last_period_coop = coop_results_.groupby(['Scenár'], as_index=False)['Rok'].max()
 
-    latest_ind = ind_df_results.merge(last_period_ind, on=["Scenario",'Period'], how='inner').rename(columns={'Individual payers fees': 'Fees', 'Individual bin count': 'Bins'})
-    latest_ind['Period'] = '2: Last forecasted period'
-    latest_ind['Payer'] = 'Individual'
-    latest_coop = coop_results_.merge(last_period_coop, on=["Scenario",'Period'], how='inner').rename(columns={'Coop fees': 'Fees', 'Coop bin count': 'Bins'})
-    latest_coop['Period'] = '2: Last forecasted period'
-    latest_coop['Payer'] = 'Coop'
+    latest_ind = ind_df_results.merge(last_period_ind, on=["Scenár",'Rok'], how='inner').rename(columns={'Individual payers fees': 'Výnos z poplatku', 'Individual bin count': 'Počet nádob'})
+    latest_ind['Rok'] = '2: Posledné prognóznované obdobie'
+    latest_ind['Platiteľ'] = 'IBV'
+    latest_coop = coop_results_.merge(last_period_coop, on=["Scenár",'Rok'], how='inner').rename(columns={'Coop fees': 'Výnos z poplatku', 'Coop bin count': 'Počet nádob'})
+    latest_coop['Rok'] = '2: Posledné prognóznované obdobie'
+    latest_coop['Platiteľ'] = 'BD a PO'
 
     results_summary_latest = pd.concat([results_summary, latest_ind, latest_coop], ignore_index=True)
-    results_summary_latest['Fees'] = results_summary_latest['Fees'].round(0).astype(int)
-    results_summary_totals = results_summary_latest.groupby(['Scenario','Period'], as_index=False)['Fees'].sum()
-    results_summary_totals['Payer'] = 'Total'
+    results_summary_latest['Výnos z poplatku'] = results_summary_latest['Výnos z poplatku'].round(0).astype(int)
+    results_summary_totals = results_summary_latest.groupby(['Scenár','Rok'], as_index=False)['Výnos z poplatku'].sum()
+    results_summary_totals['Platiteľ'] = 'Spolu'
 
-    final_results = pd.concat([results_summary_latest, results_summary_totals], ignore_index=True).sort_values(by=['Scenario', 'Payer', 'Period'])
+    final_results = pd.concat([results_summary_latest, results_summary_totals], ignore_index=True).sort_values(by=['Scenár', 'Platiteľ', 'Rok'])
 
-    results_pivot = pd.pivot(final_results, columns='Period', index=['Scenario','Payer'], values=['Fees'])
+    results_pivot = pd.pivot(final_results, columns='Rok', index=['Scenár','Platiteľ'], values=['Výnos z poplatku'])
 
     mo.vstack([
-        mo.md('## Simulation results (Fees)'),
-        mo.md('Below you can see the total results for the current simulation setup for fees in EUR.'),
-        mo.md('The table shows fees before change implementation, first year after implementation and in the last projected period.'),
-        mo.md('Then the following charts show a detailed evolution over time of fee collection and the number of bins.'),
+        mo.md('## Výsledky simulácie (výnos z poplatku)'),
+        mo.md('Nižšie môžete vidieť celkové výsledky pre aktuálne nastavenie modelu pre výnosy z poplatku v EUR.'),
+        mo.md('Tabuľka ukazuje výnosy pred zmenu, prvý rok po zmene a v poslednom roku prognózovaného obdobia.'),
+        mo.md('Následne, detailné grafy ukazujú vývoj výnosov a počtu nádob v čase.'),
         results_pivot
     ])
     return
@@ -708,25 +707,17 @@ def _(coop_results_, ind_df_results, mo, pd, results_summary):
 
 @app.cell(hide_code=True)
 def _(alt, ind_df_results, mo):
-    ind_fee_chart = mo.ui.altair_chart(alt.Chart(ind_df_results).mark_trail().encode(x='Period', y="Individual payers fees", color='Scenario'), label="Evolution of fees from individual payers in EUR")
+    ind_fee_chart = mo.ui.altair_chart(alt.Chart(ind_df_results).mark_trail().encode(x='Rok', y="Individual payers fees", color='Scenár'), label="Vývoj výnosov z IBV v EUR")
 
-    ind_bin_chart = mo.ui.altair_chart(alt.Chart(ind_df_results).mark_trail().encode(x='Period', y="Individual bin count", color='Scenario'), label="Evolution of # of bins from individual payers")
-
-    """
-    mo.vstack([
-        ind_bin_chart,
-        ind_fee_chart
-    ])
-    """
     ind_fee_chart
     return
 
 
 @app.cell
 def _(alt, coop_results_, mo):
-    coop_fee_chart = mo.ui.altair_chart(alt.Chart(coop_results_).mark_trail().encode(x='Period', y="Coop fees", color='Scenario'), label="Evolution of fees from coop and business payers in EUR")
+    coop_fee_chart = mo.ui.altair_chart(alt.Chart(coop_results_).mark_trail().encode(x='Rok', y="Coop fees", color='Scenár'), label="Vývoj výnosov od bytových domov a PO v EUR")
 
-    coop_bin_chart = mo.ui.altair_chart(alt.Chart(coop_results_).mark_trail().encode(x='Period', y="Coop bin count", color='Scenario'), label="Evolution of # of bins for coop and business payers")
+    coop_bin_chart = mo.ui.altair_chart(alt.Chart(coop_results_).mark_trail().encode(x='Rok', y="Coop bin count", color='Scenár'), label="Vývoj počtu nádob v bytových domoch a PO v EUR")
 
     mo.vstack([
         coop_fee_chart,
@@ -811,8 +802,8 @@ def _(
 
         results = pd.DataFrame({'Coop fees': fees,
                                'Coop bin count': simple_coop_forecast_bins.sum(axis=1),
-                               'Period': periods,
-                                'Scenario': 'Simple model'})
+                               'Rok': periods,
+                                'Scenár': 'Jednoduchý model'})
         return results 
 
     coop_results = coop_result_simple(coop_old_bin_ratio, coop_old_fees, coop_old_points, fee_hike_coop.value, forecast_periods_coop.value, people_per_bin=persons_per_bin_coop.value, scenario=SCENARIO)
@@ -835,8 +826,8 @@ def _(SCENARIO, coop_results, indexer, np, pd, stepped_coop):
         return pd.DataFrame(
             {'Coop fees': stepped_coop_fees_total,
              'Coop bin count': stepped_coop_bins_total,
-             'Period': periods,
-             'Scenario': 'Stepped model'})
+             'Rok': periods,
+             'Scenár': 'Komplexný model'})
 
     coop_results2 = coop_result_stepped(SCENARIO)
 
@@ -885,8 +876,8 @@ def _(ind_old_fees, indexer, np, pd, run_individual):
         return pd.DataFrame(
         {'Individual payers fees': ind_fee_evolution_total,
          'Individual bin count': ind_bin_evolution_total,
-         'Period': periods,
-         'Scenario': 'Simple model'})
+         'Rok': periods,
+         'Scenár': 'Jednoduchý model'})
     return (ind_results_simple,)
 
 
@@ -911,9 +902,9 @@ def _(
 
         for step in ind_setup_editor.value.iterrows():
             step_values = step[1]
-            price_hike = price_hike + (step_values['Fee Hike'] / 100.)
+            price_hike = price_hike + (step_values['Nárast poplatku v %'] / 100.)
             _new_fees = old_fees * (1 + price_hike)
-            _evolution = run_individual(baseline_bins, step_values['Year Gap']+1, 0, price_increase = price_hike, remove_weekly = step_values['Maximum 14d Interval'], scenario = scenario)
+            _evolution = run_individual(baseline_bins, step_values['Odstup v rokoch']+1, 0, price_increase = price_hike, remove_weekly = step_values['Maximálne 14d interval'], scenario = scenario)
             _fee_evolution = _evolution * _new_fees.T 
             if len(bin_evolution) == 0:
                 _fee_evolution[0] = _evolution[0] * old_fees.T
@@ -941,8 +932,8 @@ def _(
         return pd.DataFrame(
         {'Individual payers fees': stepped_ind_fees_total,
          'Individual bin count': stepped_ind_bins_total,
-         'Period': periods,
-         'Scenario': 'Stepped model'})
+         'Rok': periods,
+         'Scenár': 'Komplexný model'})
     return (ind_results_stepped,)
 
 
@@ -992,9 +983,9 @@ def _(
     yard_takeover,
     yard_total,
 ):
-    def equalize_frames(longer_frame: pd.DataFrame, shorter_frame: pd.DataFrame, col_name: str = 'Period'):
-        minmax = shorter_frame.Period.max()
-        delta = longer_frame.Period.max() - minmax
+    def equalize_frames(longer_frame: pd.DataFrame, shorter_frame: pd.DataFrame, col_name: str = 'Rok'):
+        minmax = shorter_frame.Rok.max()
+        delta = longer_frame.Rok.max() - minmax
         last_row = shorter_frame.query(f'{col_name} == @minmax').copy()
         for step in range(1, delta+1):
             last_row[col_name] = minmax + step 
@@ -1006,19 +997,19 @@ def _(
 
         expenses = OLO.copy()
 
-        expenses['4 OLO Yards'] = 0.
+        expenses['4 OLO Zberné dvory'] = 0.
 
         if yard_takeover.value > 0:
             expenses = expenses.merge(yard_total[['year','yard_cost']], on='year', how='left')
-            expenses['4 OLO Yards'] = expenses['yard_cost'] * olo_multiplier.value
+            expenses['4 OLO Zberné dvory'] = expenses['yard_cost'] * olo_multiplier.value
             expenses.drop(columns=['yard_cost'], inplace=True)
 
         other_exp_base = other_cost_baseline.value 
-        periods = expenses['Period'].values 
+        periods = expenses['Rok'].values 
         index = indexer(periods)
         other_exp = index * other_exp_base
 
-        expenses['2 Other Expenses'] = other_exp 
+        expenses['2 Ostatné náklady'] = other_exp 
         return expenses
 
     def results_overview():
@@ -1043,11 +1034,11 @@ def _(
         stepped_detail = []
         simple_results = []
         stepped_results = []
-        COLS = ['Fee_forecast','Bin_forecast','Period','Model']
+        COLS = ['Fee_forecast','Bin_forecast','Rok','Model']
         scenarios = {
-            1: '2 Standard Response',
-            2: '3 Strong Response',
-            3: '1 No Behavioral Change'
+            1: '2 Štandardná odozva',
+            2: '3 Výrazná odozva',
+            3: '1 Bez zmeny správania'
         }
 
         periods = [0,0]
@@ -1084,15 +1075,15 @@ def _(
             periods[1] = ind_stepped.shape[0]
 
             simple = pd.concat([coop_simple, ind_simple], ignore_index=True)
-            simple['Scenario'] = scenarios[scenario]
+            simple['Scenár'] = scenarios[scenario]
             simple_detail.append(simple)
-            simple_group = simple.groupby(['Scenario','Model','Period'], as_index=False)[['Fee_forecast','Bin_forecast']].sum()
+            simple_group = simple.groupby(['Scenár','Model','Rok'], as_index=False)[['Fee_forecast','Bin_forecast']].sum()
             simple_results.append(simple_group)
 
             stepped = pd.concat([coop_stepped, ind_stepped], ignore_index=True)
-            stepped['Scenario'] = scenarios[scenario]
+            stepped['Scenár'] = scenarios[scenario]
             stepped_detail.append(stepped)
-            stepped_group = stepped.groupby(['Scenario','Model','Period'], as_index=False)[['Fee_forecast','Bin_forecast']].sum()
+            stepped_group = stepped.groupby(['Scenár','Model','Rok'], as_index=False)[['Fee_forecast','Bin_forecast']].sum()
             stepped_results.append(stepped_group)
 
         # add NPC scenario 
@@ -1104,15 +1095,15 @@ def _(
         stepped_npc_fees = start_fee * stepped_indexer 
 
         simple_npc_df = pd.DataFrame(data={
-            'Scenario': ['0 No Policy Change']*periods[0],
-            'Model': ['Simple model']*periods[0],
-            'Period': np.arange(periods[0]),
+            'Scenár': ['0 Bez zmeny politík']*periods[0],
+            'Model': ['Jednoduchý model']*periods[0],
+            'Rok': np.arange(periods[0]),
             'Fee_forecast': simple_npc_fees}, index=np.arange(periods[0]))
 
         stepped_npc_df = pd.DataFrame(data={
-            'Scenario': ['0 No Policy Change']*periods[1],
-            'Model': ['Stepped model']*periods[1],
-            'Period': np.arange(periods[1]),
+            'Scenár': ['0 Bez zmeny politík']*periods[1],
+            'Model': ['Komplexný model']*periods[1],
+            'Rok': np.arange(periods[1]),
             'Fee_forecast': stepped_npc_fees}, index=np.arange(periods[1]))
 
 
@@ -1121,8 +1112,8 @@ def _(
 
         # merge OLO
         expenses = build_expenses()
-        together = together.merge(expenses, on=['Period'], how='left')
-        together['3 MC Share'] = together.Fee_forecast * 0.1
+        together = together.merge(expenses, on=['Rok'], how='left')
+        together['3 Podiel MČ'] = together.Fee_forecast * 0.1
 
         return together, together_detail
     return (results_overview,)
@@ -1206,9 +1197,9 @@ def _(
         for step in coop_setup_editor.value.iterrows():
 
             step_values = step[1]
-            price_hike = price_hike + (step_values['Fee Hike'] / 100.)
+            price_hike = price_hike + (step_values['Nárast poplatku v %'] / 100.)
             _new_fees = old_fees * (1 + price_hike)
-            _evolution, _latest_ratio = bin_per_point_forecast(baseline_ratio, baseline_points, price_hike, step_values['Year Gap']+1, step_values['Number of people per bin'], scenario=scenario)
+            _evolution, _latest_ratio = bin_per_point_forecast(baseline_ratio, baseline_points, price_hike, step_values['Odstup v rokoch']+1, step_values['Počet ľudí na nádobu'], scenario=scenario)
             _fee_evolution = _evolution * _new_fees.T 
             if len(bin_evolution) == 0:
                 _fee_evolution[0] = _evolution[0] * old_fees.T
@@ -1226,29 +1217,6 @@ def _(
 
         return bin_evolution, fee_evolution
     return bin_per_point_forecast, stepped_coop
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(
-        r"""
-    ## Theory of change 
-
-    Individual payers do not tend to change number of bins (becuase they almost always only have one and cannot not have trash collected), they alter their pickup frequency. 
-
-    Coops and businesses can work with the number of bins as a more tangible way of saving. Reducing frequency from 3/week to 2/week saves 1/3 of costs, while removing one bin when you have two bins saves 1/2 of costs. This is most pronounced with business 120l cans, and to a lesser extent with standard 1100l coop cans. 
-
-    So we will model impacts of fee/schedule changes this way:
-
-    1. For individuals, we will create a transition matrix for frequencies (most common ones) as a function of fee change. Plus more custom matrices when we will model changes in available frequencies.
-    2. For coops and businesses, we will do it this way:
-
-    - Create a function that converts price hike into a factor for decreasing bins per collection point
-    - We will assume that frequencies will not change unless the bins/collection point should drop below 1. In this case, we will move the overflow (or underflow) into a lower frequency.
-    - So the bins per collection will be calculated on a per interval basis so that we can distribute them afterwards.
-    """
-    )
-    return
 
 
 @app.cell
