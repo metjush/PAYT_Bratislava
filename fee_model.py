@@ -99,72 +99,30 @@ def _(OLO_base, end_of_forecast, np, pd, yard_data, yard_takeover):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""
-    # Modelovanie zmien v poplatkoch za komunálny odpad
+    language_switch = mo.ui.switch(value=False, label='Translate to English')
+    language_switch
+    return (language_switch,)
 
-    V tomto modeli je možné simulovať dopady zmien v oblasti zberu a poplatkov za komunálny odpad na výnos z poplatkov a náklady OLO. Zmenou rôznych vstupov, predpokladov a parametrov je možné modelovať očakávaný vývoj výnosov a nákladov v rôznych scenároch. Keďže množstvo dát z minulosti o reakcii obyvateľstva Bratislavy na zmeny v zbere odpadu, modelujeme viacere scenáre a ukazujeme tak rozsah možného vývoja. 
 
-    **Toto sú predpoklady, ktoré je možné meniť:**
+@app.cell
+def _(language_switch, mo, pd):
+    translation_list = pd.read_excel(str(mo.notebook_location() / 'public' / 'translation.xlsx'))
+    def translation(key: str):
+        row = translation_list.query('key == @key')
+        if language_switch.value:
+            return row['english'].values[0]
+        return row['slovak'].values[0]
+    return (translation,)
 
-    1. Ročné tempo rastu výnosov z poplatku. Východisko je `1,5 %` ročne. Tento nárast vychádza z historického vývoja a reflektuje novú výstavbu a sťahovanie ľudí do mesta.
-    2. Podiel nádob v rodinných domoch, ktoré sú plné. Východisko je `53 %`. Toto vychádza z posledných výsledkov prieskumu o naplnenosti nádob. Táto hodnota má dopad na to, koľko ľudí v reakcii na zmenu poplatkov zmení veľkosť nádoby. 
-    3. Rozdiel v nákladoch OLO oproti zberným dvorom, prevádzkovaných mestskými časťami. Východisko je `1,5x`. Toto odráža fakt, že keď mestské časti prevádzkujú zberné dvory, volia si lacnejšie možnosti. 
-    4. Či má OLO prevziať odvoz odpadu z miestnych zberných dvorov. Ak áno, náklady na tento zvoz sú zahrnuté v nákladoch OLO. Môžete si vybrať medzi prevzatím zberných dvorov alebo aj zberných miest. 
-    5. Behaviorálne scenáre (viď nižšie). Celkové výsledky modelu ukazujú výsledky pre všetky tri scenáre. 
-    6. Východisková hodnota nákladov na ostatné aktivity spojené s nakladaním s odpadmi, ktoré sú hradené z poplatku, ale nie sú realizované OLO. 
-    7. Frekvencia zvozu kuchynského odpadu:
 
-    **Zvoz kuchynského odpadu:** 
-
-    Dnes sa kuchynský odpad zváža 2x týždenne medzi aprílom a novembrom. Počas zimy sa zváža 1x za týždeň.
-
-    Toto je možnosť `Súčaný stav`. Zmeniť je ju možné na: 
-
-    1. 2x/týždenne po celý rok. Toto zvýši počet zvozov z 87 na 104 a teda zvýši náklady približne o `19,5%`.
-    2. 1x/týždenne po celý rok. Toto zníži počet zvozov z 87 na 52 a teda zníži náklady približne o `40%`.
-
-    Dopad bude viditeľný na strane nákladov, v položke `1 OLO`.
-
-    **Samotná simulácia dopadov sa nastavuje nasledovnými možnosťami:**
-
-    1. Zvýšenie sadzby poplatku (v %)
-    2. Zmena v možnostiach frekvencie zvozu
-    3. Počet obyvateľov na veľkú nádobu 1 100l
-
-    Taktiež je možné upraviť očakávané náklady OLO pre mesto, nahratím nového Excel súboru s aktualizovanými dátami. Výsledky sa automaticky aktualizujú. Excel súbor by mal obsahovať nasledovné hodnoty/štruktúru:
-
-    | Rok | 2024 | 2025 | 2026 | 2027 | 2028 | 2029 | 2030 |
-    |-----|------|------|------|------|------|------|------|
-    |NakladyOLO|
-    |Incineration|
-    |Residential waste collection|
-    |Green waste collection|
-    |Organic waste collection|
-    |Collection yards/points|
-
-    Simulácia sa nastavuje odlišne samostatne pre individuálnu bytovú výstavbu (rodinné domy) a samostatne pre bytové domy a podnikateľské subjekty. To je z toho dôvodu, že tieto skupiny reagujú odlišne na zmenu sadzieb. Zatiaľ čo pri IBV môžu občania meniť frekvenciu zvozu (štandardne majú len jednu nádobu), PO a bytové domy menia primárne počet nádob, zvozy sa upravujú iba v prípade, že nie je možné meniť počet nádob. 
-
-    Nastaviť môžete jednoduchý model (jednorazové zvýšenie poplatku v %) alebo komplexnejší krokový model, v ktorom je možné naplánovať viacero zmien v poplatkoch v čase.
-
-    ## Citlivostná analýza (zmena správania)
-
-    Štandardný model predpokladá zmenu správania v reakcií na zmenu v poplatkoch a iných podmienkach odvozu odpadu. Táto zmena je modelovaná na základe vývoja po ostatnej zmene sadzieb. Keďže sú však dáta relatívne obmedzené, pracujeme s viacerými scenármi behaviorálnych reakcií na zmeny politík.
-
-    Simulovať je možné nasledovné scenáre spreávania: 
-
-    1. **Bez zmeny správania**: Tento scenár nepredpokladá žiadne zmeny správania po zmene sadzieb. Jediná nevyhnutná zmena nastáva, keď je zrušená zmena týždenného zvozu v IBV. Toto spôsobí presun domácností na dvojtýždennu frekvenciu s väčšou nádobou (240l).
-    2. **Štandardná odozva**: Toto je východiskový scenár, ktorý z veľkej časti vychádza z extrapolácie toho, čo nastalo po ostatnej zmene poplatkov. Predpokladá relatívne miernu odozvu z hľadiska zmeny intervalov či počtu nádob. Avšak kapacita domácnosti znášať vyššie poplatky klesá s narastajúcimi poplatkami (aj v prípade rozdelenia zvýšenia do viacerých krokov).
-    3. **Výrazná odozva**: V tomto scenári predpokladáme, že oproti roku 2023 sa finančná situácia domácností zhoršila (kvôli inflácii a zvýšeniu iných daní). Reakcia na vyššie poplatky tak bude v tomto prípade výraznejšia.
-
-    Vo výsledkoch taktiež ukazujeme aj scenár **bez zmeny politík**. Teda scenár, kedy sa nezmenia ani sadzby, ani možné intervaly.
-    """
-    )
+@app.cell(hide_code=True)
+def _(mo, translation):
+    mo.md(translation('intro'))
     return
 
 
 @app.cell(hide_code=True)
-def _(mo):
+def _(mo, translation):
     # parametrize rate of growth for fees BAU, waste collection yards...
 
     global_fee_growth = mo.ui.slider(0, 10, 0.1, include_input=True, show_value=True, value=1.5)
@@ -185,44 +143,44 @@ def _(mo):
     olo_upload = mo.ui.file(filetypes=['.xls','.xlsx'], multiple=False, kind='button')
 
     mo.vstack([
-        mo.md('## Parametre modelu'),
-        mo.md('### Všeobecné predpoklady a zmeny politík'),
+        mo.md(translation('p1')),
+        mo.md(translation('p2')),
         mo.hstack([
             mo.vstack([
-                mo.md('**Ročné tempo rastu výnosov z poplatku (nová výstavba, atď.) v %**'),
+                mo.md(translation('p3')),
                 global_fee_growth
             ]),
             mo.vstack([
-                mo.md('**Prevezme OLO odvoz odpadu z miestnych zberných dvorov?**'), 
+                mo.md(translation('p4')), 
                 yard_takeover
             ])]),
         mo.hstack([
             mo.vstack([
-                mo.md('**Podiel individuálnych nádob, ktoré sú plné, v %**'), 
+                mo.md(translation('p5')), 
                 average_bin_fullness
             ]),
             mo.vstack([
-                mo.md('**Scenáre správania**'),
+                mo.md(translation('p6')),
                 scenario_selector
             ])
         ]),
         mo.hstack([
             mo.vstack([
-                mo.md('**Predpoklad rozdielu v nákladoch medzi OLO a miestnych zberných dvorov (násobok)**'),
+                mo.md(translation('p7')),
                 olo_multiplier
             ]),
             mo.vstack([
-                mo.md('**Hodnota pre ostatné náklady, hradené z poplatku (pre rok 2024)**'), 
+                mo.md(translation('p8')), 
                 other_cost_baseline
             ])
         ]),
         mo.hstack([
             mo.vstack([
-                mo.md('**Frekvencia zvozu kuchynského odpadu**'),
+                mo.md(translation('p9')),
                 organic_waste_pickup
             ]), 
             mo.vstack([
-                mo.md('**Nahrať nové náklady OLO**'),
+                mo.md(translation('p10')),
                 olo_upload
             ])
         ])
@@ -239,13 +197,8 @@ def _(mo):
     )
 
 
-@app.cell
-def _():
-    return
-
-
 @app.cell(hide_code=True)
-def _(mo, pd):
+def _(mo, pd, translation):
     fee_hike = mo.ui.slider(0,100, show_value=True, include_input=True, value=30)
     remove_weekly = mo.ui.checkbox()
     forecast_periods = mo.ui.slider(0,20, show_value=True, include_input=True, value=5)
@@ -255,12 +208,12 @@ def _(mo, pd):
 
 
     mo.vstack([
-        mo.md('### IBV (jednoduchý model)'),
-        mo.hstack([mo.md('**1 Zvýšenie základného poplatku o %**'), fee_hike], align='center'),
-        mo.hstack([mo.md('**2 Maximálna frekvencia 2x mesiac**'), remove_weekly],  align='center'),
-        mo.hstack([mo.md('**3 Počet rokov prognózy**'), forecast_periods], align='center'),
-        mo.md('### IBV (komplexný model)'),
-        mo.md('V tejto tabuľke môžete pridávať riadky ako kroky v postupných zmenách poplatkov'),
+        mo.md(translation('s1')),
+        mo.hstack([mo.md(translation('s2')), fee_hike], align='center'),
+        mo.hstack([mo.md(translation('s3')), remove_weekly],  align='center'),
+        mo.hstack([mo.md(translation('s4')), forecast_periods], align='center'),
+        mo.md(translation('s5')),
+        mo.md(translation('s6')),
         ind_setup_editor
 
     ])
@@ -268,7 +221,7 @@ def _(mo, pd):
 
 
 @app.cell(hide_code=True)
-def _(mo, pd):
+def _(mo, pd, translation):
     fee_hike_coop = mo.ui.slider(0,100, show_value=True, include_input=True, value=30)
     persons_per_bin_coop = mo.ui.slider(45,200,show_value=True, include_input=True, value=45)
     forecast_periods_coop = mo.ui.slider(0,20, show_value=True, include_input=True, value=5)
@@ -277,11 +230,11 @@ def _(mo, pd):
     coop_setup_editor = mo.ui.data_editor(data=coop_setup_df)
 
     mo.vstack([
-         mo.md('### BD a PO (jednoduchý model)'),
-        mo.hstack([mo.md('**1 Zvýšenie základného poplatku o %**'), fee_hike_coop], align='center'),
-        mo.hstack([mo.md('**2 Počet obyvateľov na 1 110l nádobu**'), persons_per_bin_coop], align='center'),
-        mo.hstack([mo.md('**3 Počet rokov prognózy**'), forecast_periods_coop], align='center'),
-        mo.md('### BD a PO (komplexný model)'),
+         mo.md(translation('s7')),
+        mo.hstack([mo.md(translation('s8')), fee_hike_coop], align='center'),
+        mo.hstack([mo.md(translation('s9')), persons_per_bin_coop], align='center'),
+        mo.hstack([mo.md(translation('s10')), forecast_periods_coop], align='center'),
+        mo.md(translation('s11')),
         coop_setup_editor
     ])
     return (
@@ -316,125 +269,126 @@ def _(
     old_fee_5,
     old_fee_6,
     old_fee_7,
+    translation,
 ):
     mo.vstack([
-        mo.md('## Príklady mesačných nárastov poplatok pre aktuálne nastavený model'),
-        mo.md('### Domácnosti'),
+        mo.md(translation('e1')),
+        mo.md(translation('e2')),
         mo.hstack([
             mo.vstack([
-                mo.md('#### Jednoduchý model'),
+                mo.md(translation('e3')),
                 mo.stat(
-                    label='1 IBV | Týždenný zvoz | 120l',
+                    label=translation('e4'),
                     value=f'{(old_fee_1/12.):.1f} € → {new_fee_1_simple/12.:.1f} €', 
                     direction='increase',
-                    caption=f'{(new_fee_1_simple-old_fee_1)/12.:.1f} € mesačný nárast', 
+                    caption=f'{(new_fee_1_simple-old_fee_1)/12.:.1f} {translation("e5")}', 
                     bordered=True
                 ), 
                 mo.stat(
-                    label='2 IBV | Zvoz 2x mesačne | 120l',
+                    label=translation('e6'),
                     value=f'{(old_fee_2/12.):.1f} € → {new_fee_2_simple/12.:.1f} €', 
                     direction='increase',
-                    caption=f'{(new_fee_2_simple-old_fee_2)/12.:.1f} € mesačný nárast', 
+                    caption=f'{(new_fee_2_simple-old_fee_2)/12.:.1f} {translation("e5")}', 
                     bordered=True
                 )
                 , 
                 mo.stat(
-                    label='3 Bytové domy | Zvoz 2x týždenne | 1100l | 45 ľudí na nádobu | 2 ľudia na domácnosť',
+                    label=translation('e7'),
                     value=f'{(old_fee_3/12.):.1f} € → {new_fee_3_simple/12.:.1f} €', 
                     direction='increase',
-                    caption=f'{(new_fee_3_simple-old_fee_3)/12.:.1f} € mesačný nárast', 
+                    caption=f'{(new_fee_3_simple-old_fee_3)/12.:.1f} {translation("e5")}', 
                     bordered=True
                 ), 
                 mo.stat(
-                    label='4 Bytové domy | Zvoz 3x týždenne | 1100l | 60 ľudí na nádobu | 2 ľudia na domácnosť',
+                    label=translation('e8'),
                     value=f'{(old_fee_4/12.):.1f} € → {new_fee_4_simple/12.:.1f} €', 
                     direction='increase',
-                    caption=f'{(new_fee_4_simple-old_fee_4)/12.:.1f} € mesačný nárast', 
+                    caption=f'{(new_fee_4_simple-old_fee_4)/12.:.1f} {translation("e5")}', 
                     bordered=True
                 )
             ]),
             mo.vstack([
-                mo.md('#### Komplexný model'),
+                mo.md(translation('e9')),
                 mo.stat(
-                    label='1 IBV | Týždenný zvoz | 120l',
+                    label=translation('e4'),
                     value=f'{(old_fee_1/12.):.1f} € → {new_fee_1_step/12.:.1f} €', 
                     direction='increase',
-                    caption=f'{(new_fee_1_step-old_fee_1)/12.:.1f} € mesačný nárast', 
+                    caption=f'{(new_fee_1_step-old_fee_1)/12.:.1f} {translation("e5")}', 
                     bordered=True
                 ), 
                 mo.stat(
-                    label='2 IBV | Zvoz 2x mesačne | 120l',
+                    label=translation('e6'),
                     value=f'{(old_fee_2/12.):.1f} € → {new_fee_2_step/12.:.1f} €', 
                     direction='increase',
-                    caption=f'{(new_fee_2_step-old_fee_2)/12.:.1f} € mesačný nárast', 
+                    caption=f'{(new_fee_2_step-old_fee_2)/12.:.1f} {translation("e5")}', 
                     bordered=True
                 )
                 , 
                 mo.stat(
-                    label='3 Bytové domy | Zvoz 2x týždenne | 1100l | 45 ľudí na nádobu | 2 ľudia na domácnosť',
+                    label=translation('e7'),
                     value=f'{(old_fee_3/12.):.1f} € → {new_fee_3_step/12.:.1f} €', 
                     direction='increase',
-                    caption=f'{(new_fee_3_step-old_fee_3)/12.:.1f} € mesačný nárast', 
+                    caption=f'{(new_fee_3_step-old_fee_3)/12.:.1f} {translation("e5")}', 
                     bordered=True
                 ), 
                 mo.stat(
-                    label='4 Bytové domy | Zvoz 3x týždenne | 1100l | 60 ľudí na nádobu | 2 ľudia na domácnosť',
+                    label=translation('e8'),
                     value=f'{(old_fee_4/12.):.1f} € → {new_fee_4_step/12.:.1f} €', 
                     direction='increase',
-                    caption=f'{(new_fee_4_step-old_fee_4)/12.:.1f} € mesačný nárast', 
+                    caption=f'{(new_fee_4_step-old_fee_4)/12.:.1f} {translation("e5")}', 
                     bordered=True
                 )
             ])
         ]),
-        mo.md('### Nádoby'),
+        mo.md(translation('e10')),
         mo.hstack([
             mo.vstack([
-                mo.md('#### Jednoduchý model'),
+                mo.md(translation('e3')),
                 mo.stat(
-                    label='5 120l | Zvoz 2x mesačne',
+                    label=translation('e11'),
                     value=f'{(old_fee_5/12.):.1f} € → {new_fee_5_simple/12.:.1f} €', 
                     direction='increase',
-                    caption=f'{(new_fee_5_simple-old_fee_5)/12.:.1f} € mesačný nárast', 
+                    caption=f'{(new_fee_5_simple-old_fee_5)/12.:.1f} {translation("e5")}', 
                     bordered=True
                 ), 
                 mo.stat(
-                    label='6 240l | Zvoz 2x mesačne',
+                    label=translation('e12'),
                     value=f'{(old_fee_6/12.):.1f} € → {new_fee_6_simple/12.:.1f} €', 
                     direction='increase',
-                    caption=f'{(new_fee_6_simple-old_fee_6)/12.:.1f} € mesačný nárast', 
+                    caption=f'{(new_fee_6_simple-old_fee_6)/12.:.1f} {translation("e5")}', 
                     bordered=True
                 )
                 , 
                 mo.stat(
-                    label='7 1100l | Zvoz 2x týždenne',
+                    label=translation('e13'),
                     value=f'{(old_fee_7/12.):.1f} € → {new_fee_7_simple/12.:.1f} €', 
                     direction='increase',
-                    caption=f'{(new_fee_7_simple-old_fee_7)/12.:.1f} € mesačný nárast', 
+                    caption=f'{(new_fee_7_simple-old_fee_7)/12.:.1f} {translation("e5")}', 
                     bordered=True
                 )
             ]),
             mo.vstack([
-                mo.md('#### Komplexný model'),
+                mo.md(translation('e9')),
                 mo.stat(
-                    label='5 120l | Zvoz 2x mesačne',
+                    label=translation('e11'),
                     value=f'{(old_fee_5/12.):.1f} € → {new_fee_5_step/12.:.1f} €', 
                     direction='increase',
-                    caption=f'{(new_fee_5_step-old_fee_5)/12.:.1f} € mesačný nárast', 
+                    caption=f'{(new_fee_5_step-old_fee_5)/12.:.1f} {translation("e5")}', 
                     bordered=True
                 ), 
                 mo.stat(
-                    label='6 240l | Zvoz 2x mesačne',
+                    label=translation('e12'),
                     value=f'{(old_fee_6/12.):.1f} € → {new_fee_6_step/12.:.1f} €', 
                     direction='increase',
-                    caption=f'{(new_fee_6_step-old_fee_6)/12.:.1f} € mesačný nárast', 
+                    caption=f'{(new_fee_6_step-old_fee_6)/12.:.1f} {translation("e5")}', 
                     bordered=True
                 )
                 , 
                 mo.stat(
-                    label='7 1100l | Zvoz 2x týždenne',
+                    label=translation('e13'),
                     value=f'{(old_fee_7/12.):.1f} € → {new_fee_7_step/12.:.1f} €', 
                     direction='increase',
-                    caption=f'{(new_fee_7_step-old_fee_7)/12.:.1f} € mesačný nárast', 
+                    caption=f'{(new_fee_7_step-old_fee_7)/12.:.1f} {translation("e5")}', 
                     bordered=True
                 )
             ])
@@ -522,7 +476,7 @@ def _(
 
 
 @app.cell(hide_code=True)
-def _(alt, mo, organic_waste_pickup, results_overview):
+def _(alt, mo, organic_waste_pickup, results_overview, translation):
     results_together, detailed_results_together = results_overview()
 
     organic_schedule = organic_waste_pickup.selected_key
@@ -544,13 +498,13 @@ def _(alt, mo, organic_waste_pickup, results_overview):
         return lines_chart + bar_chart 
 
 
-    total_simple = mo.ui.altair_chart(summary_chart('Jednoduchý model', results_together), label=f"Celkový odhad výnosov z poplatku pre každý scenár (Jednoduchý model | Kuchynský odpad: {organic_schedule})")
-    total_stepped = mo.ui.altair_chart(summary_chart('Komplexný model', results_together), label=f"Celkový odhad výnosov z poplatku pre každý scenár (Komplexný model | Kuchynský odpad: {organic_schedule})")
+    total_simple = mo.ui.altair_chart(summary_chart('Jednoduchý model', results_together), label=f"{translation('l1')} {organic_schedule})")
+    total_stepped = mo.ui.altair_chart(summary_chart('Komplexný model', results_together), label=f"{translation('l2')}  {organic_schedule})")
 
     export_button = mo.ui.run_button(label='Exportovať dáta')
 
     mo.vstack([
-        mo.md('## Celkový výsledky pre všetky scenáre správania'),
+        mo.md(translation('r1')),
         total_simple,
         total_stepped,
         export_button
@@ -610,14 +564,14 @@ def _(
 
 
 @app.cell
-def _(export_button, mo, results_for_export, results_together):
+def _(export_button, mo, results_for_export, results_together, translation):
     mo.stop(not export_button.value)
     export_results = results_for_export(results_together)
     mo.vstack([
-        mo.md('### Dáta z grafu na export'),
-        mo.md('Stlačením tlačidla *Download* pod tabuľkou exportujete dáta do CSV formátu, ktorý je možné použiť v Exceli'),
-        mo.md('Exportované dáta obsahujú aj zhrnutie použitých predpokladov'),
-        mo.md('Grafy môžu byť uložené stlačením tlačidla ... v rohu grafu ako obrázok'),
+        mo.md(translation('r2')),
+        mo.md(translation('r3')),
+        mo.md(translation('r4')),
+        mo.md(translation('r5')),
         export_results
     ])
     return
@@ -675,7 +629,7 @@ def _(coop_results_, ind_df_results, pd):
 
 
 @app.cell(hide_code=True)
-def _(coop_results_, ind_df_results, mo, pd, results_summary):
+def _(coop_results_, ind_df_results, mo, pd, results_summary, translation):
     last_period_ind = ind_df_results.groupby(['Scenár'], as_index=False)['Rok'].max()
     last_period_coop = coop_results_.groupby(['Scenár'], as_index=False)['Rok'].max()
 
@@ -696,10 +650,10 @@ def _(coop_results_, ind_df_results, mo, pd, results_summary):
     results_pivot = pd.pivot(final_results, columns='Rok', index=['Scenár','Platiteľ'], values=['Výnos z poplatku'])
 
     mo.vstack([
-        mo.md('## Výsledky simulácie (výnos z poplatku)'),
-        mo.md('Nižšie môžete vidieť celkové výsledky pre aktuálne nastavenie modelu pre výnosy z poplatku v EUR.'),
-        mo.md('Tabuľka ukazuje výnosy pred zmenu, prvý rok po zmene a v poslednom roku prognózovaného obdobia.'),
-        mo.md('Následne, detailné grafy ukazujú vývoj výnosov a počtu nádob v čase.'),
+        mo.md(translation('r6')),
+        mo.md(translation('r7')),
+        mo.md(translation('r8')),
+        mo.md(translation('r9')),
         results_pivot
     ])
     return
