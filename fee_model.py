@@ -1,12 +1,13 @@
 import marimo
 
-__generated_with = "0.16.2"
+__generated_with = "0.19.11"
 app = marimo.App(width="medium")
 
 
 @app.cell
 def _():
     import micropip
+
     return (micropip,)
 
 
@@ -25,6 +26,7 @@ def _():
     import altair as alt
     import os 
     import io
+
     return alt, io, mo, np, pd
 
 
@@ -112,33 +114,35 @@ def _(language_switch, mo, pd):
         if language_switch.value:
             return row['english'].values[0]
         return row['slovak'].values[0]
+
     return (translation,)
 
 
 @app.cell(hide_code=True)
 def _(mo, translation):
-    mo.md(translation('intro'))
+    s = mo.md(translation('intro'))
+    s
     return
 
 
-@app.cell(hide_code=True)
+@app.cell
 def _(mo, translation):
     # parametrize rate of growth for fees BAU, waste collection yards...
 
     global_fee_growth = mo.ui.slider(0, 10, 0.1, include_input=True, show_value=True, value=1.5)
-    yard_takeover = mo.ui.dropdown(options = {'0 Nie': 0, '1 Iba riadne zberné dvory': 1, '2 Všetky zberné dvory a miesta': 2}, allow_select_none=False, searchable=True, value='0 Nie')
+    yard_takeover = mo.ui.dropdown(options = {translation('d1'): 0, translation('d2'): 1, translation('d3'): 2}, allow_select_none=False, searchable=True, value=translation('d1'))
     average_bin_fullness = mo.ui.slider(0,100,show_value=True, include_input=True, value=53)
-    scenario_selector = mo.ui.dropdown(options = {'1 Bez zmeny správania': 3, '2 Štandardná odozva': 1, '3 Výrazná odozva': 2},
+    scenario_selector = mo.ui.dropdown(options = {translation('d4'): 3, translation('d5'): 1, translation('d6'): 2},
                                        allow_select_none=False,
                                        searchable=True, 
-                                       value='2 Štandardná odozva'
+                                       value=translation('d5')
                                       )
 
     other_cost_baseline = mo.ui.number(start=0, value=1070384)
     olo_multiplier = mo.ui.slider(0,10,0.1, include_input=True, show_value=True, value=1.5)
-    organic_waste_pickup = mo.ui.dropdown(options = {'Súčasná frekvencia': 0, '2x/týždeň': 1, '1x/týždeň': 2},
+    organic_waste_pickup = mo.ui.dropdown(options = {translation('d7'): 0, translation('d8'): 1, translation('d9'): 2},
                                           allow_select_none=False,
-                                         value='Súčasná frekvencia')
+                                         value=translation('d8'))
 
     olo_upload = mo.ui.file(filetypes=['.xls','.xlsx'], multiple=False, kind='button')
 
@@ -484,7 +488,8 @@ def _(alt, mo, organic_waste_pickup, results_overview, translation):
     def summary_chart(model, result_df):
 
         _df = result_df.query('Model == @model')[['Rok','Fee_forecast','Scenár']].copy()
-        _exp_df = result_df.query('Model == @model and Scenár == "2 Štandardná odozva"').drop(columns=['Fee_forecast','Bin_forecast','Scenár'])
+        _standard = translation('d5')
+        _exp_df = result_df.query('Model == @model and Scenár == @_standard').drop(columns=['Fee_forecast','Bin_forecast','Scenár'])
         _melt_exp = _exp_df.melt(id_vars=['Rok'], value_vars=['1 OLO', '2 Ostatné náklady', '3 Podiel MČ', '4 OLO Zberné dvory'], var_name='Kategória',value_name='Náklady').sort_values(by=['Kategória'], ascending=True)
 
         lines_chart = alt.Chart(_df).mark_trail().encode(alt.X('Rok').axis(format='0d', 
@@ -498,10 +503,10 @@ def _(alt, mo, organic_waste_pickup, results_overview, translation):
         return lines_chart + bar_chart 
 
 
-    total_simple = mo.ui.altair_chart(summary_chart('Jednoduchý model', results_together), label=f"{translation('l1')} {organic_schedule})")
-    total_stepped = mo.ui.altair_chart(summary_chart('Komplexný model', results_together), label=f"{translation('l2')}  {organic_schedule})")
+    total_simple = mo.ui.altair_chart(summary_chart(translation('sc2'), results_together), label=f"{translation('l1')} {organic_schedule})")
+    total_stepped = mo.ui.altair_chart(summary_chart(translation('sc1'), results_together), label=f"{translation('l2')}  {organic_schedule})")
 
-    export_button = mo.ui.run_button(label='Exportovať dáta')
+    export_button = mo.ui.run_button(label=translation('ex17'))
 
     mo.vstack([
         mo.md(translation('r1')),
@@ -527,6 +532,7 @@ def _(
     persons_per_bin_coop,
     remove_weekly,
     scenario_selector,
+    translation,
     yard_takeover,
 ):
     def results_for_export(results_frame: pd.DataFrame) -> pd.DataFrame:
@@ -536,37 +542,40 @@ def _(
         footer = [
             buffer,
             buffer, 
-            ['-- POUZITE PREDPOKLADY --'] + [pd.NA] * (len(cols)-1),
-            ['# Zmeny sadzieb pre jednoduchy model '] + [pd.NA] * (len(cols)-1),
-            ['## IBV:', f'+{fee_hike.value} % | {"Bez tyzdenneho zvozu" if remove_weekly.value else "Tyzdenny zvoz"}'] + [pd.NA] * (len(cols)-2),
-            ['## PO/BD:', f'+{fee_hike_coop.value} % | {persons_per_bin_coop.value} ludi na nadobu']+ [pd.NA] * (len(cols)-2),
+            [translation('ex1')] + [pd.NA] * (len(cols)-1),
+            [translation('ex2')] + [pd.NA] * (len(cols)-1),
+            [translation('ex3'), f'+{fee_hike.value} % | {translation('ex4') if remove_weekly.value else translation('ex5')}'] + [pd.NA] * (len(cols)-2),
+            [translation('ex6'), f'+{fee_hike_coop.value} % | {persons_per_bin_coop.value} {translation('ex7')}']+ [pd.NA] * (len(cols)-2),
             buffer,
-            ['# Zmeny sadzieb pre krokovy model '] + [pd.NA] * (len(cols)-1),
-            ['## IBV:'] + [pd.NA] * (len(cols)-1),
+            [translation('ex8')] + [pd.NA] * (len(cols)-1),
+            [translation('ex2')] + [pd.NA] * (len(cols)-1),
             [ind_setup_editor.value.to_string()] + [pd.NA] * (len(cols)-1),
-            ['## PO/BD:'] + [pd.NA] * (len(cols)-1),
+            [translation('ex6')] + [pd.NA] * (len(cols)-1),
             [coop_setup_editor.value.to_string()] + [pd.NA] * (len(cols)-1),
             buffer,
-            ['# Predpoklady pre tieto vysledky: '] + [pd.NA] * (len(cols)-1),
-            ['## Scenar spravania ludi:', scenario_selector.selected_key] + [pd.NA] * (len(cols)-2),
-            ['## Frekvencia odvozu kuchynskeho odpadu:', organic_waste_pickup.selected_key] + [pd.NA] * (len(cols)-2),
-            ['## OLO prebera:', yard_takeover.selected_key] + [pd.NA] * (len(cols)-2),
-            ['## Tempo rastu vynosov:', f'{global_fee_growth.value} %'] + [pd.NA] * (len(cols)-2),
-            ['## Pocet nadob, ktore su plne:', f'{average_bin_fullness.value} %'] + [pd.NA] * (len(cols)-2),
-            ['## O kolko je OLO drahsie pri zbernych dvoroch:', f'{olo_multiplier.value} %'] + [pd.NA] * (len(cols)-2),
-            ['## Ostatne naklady spojene s odpadom:', f'{other_cost_baseline.value:,.0f} EUR'] + [pd.NA] * (len(cols)-2)
+            [translation('ex9')] + [pd.NA] * (len(cols)-1),
+            [translation('ex10'), scenario_selector.selected_key] + [pd.NA] * (len(cols)-2),
+            [translation('ex11'), organic_waste_pickup.selected_key] + [pd.NA] * (len(cols)-2),
+            [translation('ex12'), yard_takeover.selected_key] + [pd.NA] * (len(cols)-2),
+            [translation('ex13'), f'{global_fee_growth.value} %'] + [pd.NA] * (len(cols)-2),
+            [translation('ex14'), f'{average_bin_fullness.value} %'] + [pd.NA] * (len(cols)-2),
+            [translation('ex15'), f'{olo_multiplier.value} %'] + [pd.NA] * (len(cols)-2),
+            [translation('ex16'), f'{other_cost_baseline.value:,.0f} EUR'] + [pd.NA] * (len(cols)-2)
         ]
 
         footer_df = pd.DataFrame(columns=cols, data=footer)
 
         return pd.concat([results_frame, footer_df], ignore_index=True)
+
     return (results_for_export,)
 
 
 @app.cell
 def _(export_button, mo, results_for_export, results_together, translation):
     mo.stop(not export_button.value)
-    export_results = results_for_export(results_together)
+    export_results = mo.ui.dataframe(results_for_export(results_together),
+                                     show_download=True,
+                                     download_csv_encoding='utf-8-sig')
     mo.vstack([
         mo.md(translation('r2')),
         mo.md(translation('r3')),
@@ -723,6 +732,7 @@ def _(global_fee_growth, np):
         rate_array = np.full(shape=periods.shape, fill_value=rate_of_inc)
         index_array = rate_array ** periods
         return index_array
+
     return (indexer,)
 
 
@@ -739,6 +749,7 @@ def _(
     np,
     pd,
     persons_per_bin_coop,
+    translation,
 ):
     def coop_result_simple(initial_state: np.array, initial_fees: np.array, point_count: np.array, price_increase: float, periods: int, people_per_bin: int = 45, scenario: int = 1):
 
@@ -757,7 +768,7 @@ def _(
         results = pd.DataFrame({'Coop fees': fees,
                                'Coop bin count': simple_coop_forecast_bins.sum(axis=1),
                                'Rok': periods,
-                                'Scenár': 'Jednoduchý model'})
+                                'Scenár': translation('sc2')})
         return results 
 
     coop_results = coop_result_simple(coop_old_bin_ratio, coop_old_fees, coop_old_points, fee_hike_coop.value, forecast_periods_coop.value, people_per_bin=persons_per_bin_coop.value, scenario=SCENARIO)
@@ -765,7 +776,7 @@ def _(
 
 
 @app.cell
-def _(SCENARIO, coop_results, indexer, np, pd, stepped_coop):
+def _(SCENARIO, coop_results, indexer, np, pd, stepped_coop, translation):
     def coop_result_stepped(scenario: int = 1):
 
         stepped_coop_bins, stepped_coop_fees = stepped_coop(scenario)
@@ -781,7 +792,7 @@ def _(SCENARIO, coop_results, indexer, np, pd, stepped_coop):
             {'Coop fees': stepped_coop_fees_total,
              'Coop bin count': stepped_coop_bins_total,
              'Rok': periods,
-             'Scenár': 'Komplexný model'})
+             'Scenár': translation('sc1')})
 
     coop_results2 = coop_result_stepped(SCENARIO)
 
@@ -807,7 +818,7 @@ def _(ind_baseline):
 
 
 @app.cell
-def _(ind_old_fees, indexer, np, pd, run_individual):
+def _(ind_old_fees, indexer, np, pd, run_individual, translation):
     # forecast individual homes
     def ind_results_simple(initial_state: np.array, initial_fees: np.array, periods: int, price_increase: float, remove_weekly: bool, scenario: int):
 
@@ -831,7 +842,8 @@ def _(ind_old_fees, indexer, np, pd, run_individual):
         {'Individual payers fees': ind_fee_evolution_total,
          'Individual bin count': ind_bin_evolution_total,
          'Rok': periods,
-         'Scenár': 'Jednoduchý model'})
+         'Scenár': translation('sc2')})
+
     return (ind_results_simple,)
 
 
@@ -845,6 +857,7 @@ def _(
     np,
     pd,
     run_individual,
+    translation,
 ):
     def stepped_individual(scenario:int = 1):
 
@@ -887,7 +900,8 @@ def _(
         {'Individual payers fees': stepped_ind_fees_total,
          'Individual bin count': stepped_ind_bins_total,
          'Rok': periods,
-         'Scenár': 'Komplexný model'})
+         'Scenár': translation('sc1')})
+
     return (ind_results_stepped,)
 
 
@@ -934,6 +948,7 @@ def _(
     pd,
     persons_per_bin_coop,
     remove_weekly,
+    translation,
     yard_takeover,
     yard_total,
 ):
@@ -990,9 +1005,9 @@ def _(
         stepped_results = []
         COLS = ['Fee_forecast','Bin_forecast','Rok','Model']
         scenarios = {
-            1: '2 Štandardná odozva',
-            2: '3 Výrazná odozva',
-            3: '1 Bez zmeny správania'
+            1: translation('d5'),
+            2: translation('d6'),
+            3: translation('d4')
         }
 
         periods = [0,0]
@@ -1049,14 +1064,14 @@ def _(
         stepped_npc_fees = start_fee * stepped_indexer 
 
         simple_npc_df = pd.DataFrame(data={
-            'Scenár': ['0 Bez zmeny politík']*periods[0],
-            'Model': ['Jednoduchý model']*periods[0],
+            'Scenár': [translation('sc3')]*periods[0],
+            'Model': [translation('sc2')]*periods[0],
             'Rok': np.arange(periods[0]),
             'Fee_forecast': simple_npc_fees}, index=np.arange(periods[0]))
 
         stepped_npc_df = pd.DataFrame(data={
-            'Scenár': ['0 Bez zmeny politík']*periods[1],
-            'Model': ['Komplexný model']*periods[1],
+            'Scenár': [translation('sc3')]*periods[1],
+            'Model': [translation('sc1')]*periods[1],
             'Rok': np.arange(periods[1]),
             'Fee_forecast': stepped_npc_fees}, index=np.arange(periods[1]))
 
@@ -1070,6 +1085,7 @@ def _(
         together['3 Podiel MČ'] = together.Fee_forecast * 0.1
 
         return together, together_detail
+
     return (results_overview,)
 
 
@@ -1170,6 +1186,7 @@ def _(
             baseline_ratio = _latest_ratio
 
         return bin_evolution, fee_evolution
+
     return bin_per_point_forecast, stepped_coop
 
 
@@ -1225,6 +1242,7 @@ def _(average_bin_fullness, np):
         ]
 
         return np.array(matrix)
+
     return (matrix_model_individual,)
 
 
@@ -1244,6 +1262,7 @@ def _(matrix_model_individual, np):
             return run_individual(history, years, current_year+1, **kwargs)
 
         return initial_state
+
     return (run_individual,)
 
 
