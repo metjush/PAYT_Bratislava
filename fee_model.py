@@ -207,7 +207,7 @@ def _(mo, pd, translation):
     remove_weekly = mo.ui.checkbox()
     forecast_periods = mo.ui.slider(0,20, show_value=True, include_input=True, value=5)
 
-    ind_setup_df = pd.DataFrame(columns=['Nárast poplatku v %','Odstup v rokoch','Maximálne 14d interval'], data=[[30,5,False]])
+    ind_setup_df = pd.DataFrame(columns=[translation('t1'),translation('t2'),translation('t3')], data=[[30,5,False]])
     ind_setup_editor = mo.ui.data_editor(data=ind_setup_df)
 
 
@@ -230,7 +230,7 @@ def _(mo, pd, translation):
     persons_per_bin_coop = mo.ui.slider(45,200,show_value=True, include_input=True, value=45)
     forecast_periods_coop = mo.ui.slider(0,20, show_value=True, include_input=True, value=5)
 
-    coop_setup_df = pd.DataFrame(columns=['Nárast poplatku v %','Počet ľudí na nádobu','Odstup v rokoch'], data=[[30,45,5]])
+    coop_setup_df = pd.DataFrame(columns=[translation('t1'),translation('t4'),translation('t2')], data=[[30,45,5]])
     coop_setup_editor = mo.ui.data_editor(data=coop_setup_df)
 
     mo.vstack([
@@ -409,10 +409,11 @@ def _(
     fee_hike_coop,
     ind_old_fees,
     ind_setup_editor,
+    translation,
 ):
     # create model households
     ind_fee_hike_simple = (1 + fee_hike.value/100.)
-    ind_fee_hike_step = (1 + ind_setup_editor.value['Nárast poplatku v %'].div(100.)).product()
+    ind_fee_hike_step = (1 + ind_setup_editor.value[translation('t1')].div(100.)).product()
     ## 1 Individual household, 1x weekly 120L
     old_fee_1 = ind_old_fees[2][0]
     new_fee_1_simple = old_fee_1 * ind_fee_hike_simple
@@ -423,13 +424,13 @@ def _(
     new_fee_2_step = old_fee_2 * ind_fee_hike_step
 
     _coop_sample = fee_data.query('Payer == "Coop"')
-    _coop_baseline = _coop_sample.query('Year == 2025').groupby(['IntervalPerWeek'], as_index=False)[['CollectionPoints','BinCount','TotalFee','TotalVolume']].sum()
+    _coop_baseline = _coop_sample.query(f'{translation("gr1")} == 2025').groupby(['IntervalPerWeek'], as_index=False)[['CollectionPoints','BinCount','TotalFee','TotalVolume']].sum()
     _coop_baseline['FeePerBin'] = _coop_baseline['TotalFee'].div(_coop_baseline['BinCount'])
     _coop_baseline['BinPerPoint'] = _coop_baseline['BinCount'].div(_coop_baseline['CollectionPoints'])
     _coop_baseline['FeePerPoint'] = _coop_baseline.FeePerBin.multiply(_coop_baseline.BinPerPoint)
 
     coop_fee_hike_simple = (1 + fee_hike_coop.value/100.)
-    coop_fee_hike_step = (1 + coop_setup_editor.value['Nárast poplatku v %'].div(100.)).product()
+    coop_fee_hike_step = (1 + coop_setup_editor.value[translation('t1')].div(100.)).product()
     ## 3 Block of flats, 2x weekly 1100L, 45 people per bin 
     old_fee_3 = _coop_baseline['FeePerBin'].values[2] / 45. * 2
     new_fee_3_simple = old_fee_3 * coop_fee_hike_simple
@@ -487,18 +488,18 @@ def _(alt, mo, organic_waste_pickup, results_overview, translation):
 
     def summary_chart(model, result_df):
 
-        _df = result_df.query('Model == @model')[['Rok','Fee_forecast','Scenár']].copy()
+        _df = result_df.query('Model == @model')[[translation("gr1"),translation('gr10'),translation("sc0")]].copy()
         _standard = translation('d5')
-        _exp_df = result_df.query('Model == @model and Scenár == @_standard').drop(columns=['Fee_forecast','Bin_forecast','Scenár'])
-        _melt_exp = _exp_df.melt(id_vars=['Rok'], value_vars=['1 OLO', '2 Ostatné náklady', '3 Podiel MČ', '4 OLO Zberné dvory'], var_name='Kategória',value_name='Náklady').sort_values(by=['Kategória'], ascending=True)
+        _exp_df = result_df.query(f'Model == @model and {translation("sc0")} == @_standard').drop(columns=[translation('gr10'),translation('gr11'),translation("sc0")])
+        _melt_exp = _exp_df.melt(id_vars=[translation("gr1")], value_vars=['1 OLO', '2 Ostatné náklady', '3 Podiel MČ', '4 OLO Zberné dvory'], var_name='Kategória',value_name='Náklady').sort_values(by=['Kategória'], ascending=True)
 
-        lines_chart = alt.Chart(_df).mark_trail().encode(alt.X('Rok').axis(format='0d', 
-                                                                             tickCount=_df.Rok.max()), 
-                                                         y='Fee_forecast',
-                                            color=alt.Color('Scenár').scale(scheme='paired'))
+        lines_chart = alt.Chart(_df).mark_trail().encode(alt.X(translation("gr1")).axis(format='0d', 
+                                                                             tickCount=_df[translation("gr1")].max()), 
+                                                         y=translation('gr10'),
+                                            color=alt.Color(translation("sc0")).scale(scheme='paired'))
 
-        bar_chart = alt.Chart(_melt_exp).mark_bar(size=25).encode(alt.X('Rok').axis(format='0d', 
-                                                                             tickCount=_df.Rok.max()),y='Náklady',color='Kategória')
+        bar_chart = alt.Chart(_melt_exp).mark_bar(size=25).encode(alt.X(translation("gr1")).axis(format='0d', 
+                                                                             tickCount=_df[translation("gr1")].max()),y='Náklady',color='Kategória')
 
         return lines_chart + bar_chart 
 
@@ -587,7 +588,7 @@ def _(export_button, mo, results_for_export, results_together, translation):
 
 
 @app.cell
-def _(OLO_base, organic_waste_pickup):
+def _(OLO_base, organic_waste_pickup, translation):
     def update_organic(cost_df):
         organic_schedule = organic_waste_pickup.value
         if organic_schedule == 1: # 2x week even in winter 
@@ -609,7 +610,7 @@ def _(OLO_base, organic_waste_pickup):
             """
             cost_df['Organic waste collection'] = cost_df['Organic waste collection'] * (52./87.)
         cost_df['1 OLO'] = cost_df.drop(columns=['year']).sum(axis=1)
-        cost_df['Rok'] = cost_df.year - 2025
+        cost_df[translation('gr1')] = cost_df.year - 2025
         return cost_df.query('year > 2024')
 
 
@@ -625,38 +626,38 @@ def _(scenario_selector):
 
 
 @app.cell(hide_code=True)
-def _(coop_results_, ind_df_results, pd):
-    results_summary = ind_df_results.query('Rok < 2').copy().rename(columns={'Individual payers fees': 'Výnos z poplatku', 'Individual bin count': 'Počet nádob'})
-    results_summary['Platiteľ'] = 'IBV'
+def _(coop_results_, ind_df_results, pd, translation):
+    results_summary = ind_df_results.query(f'{translation("gr1")} < 2').copy()
+    results_summary[translation('gr3')] = translation('gr6')
 
-    _coop_period1 = coop_results_.query('Rok < 2').copy().rename(columns={'Coop fees': 'Výnos z poplatku', 'Coop bin count': 'Počet nádob'})
-    _coop_period1['Platiteľ'] = 'BD a PO'
+    _coop_period1 = coop_results_.query(f'{translation("gr1")} < 2').copy()
+    _coop_period1[translation('gr3')] = translation('gr7')
 
     results_summary = pd.concat([results_summary, _coop_period1], ignore_index=True)
-    results_summary["Rok"] = results_summary["Rok"].astype(str).str.replace('0','0: Pred zmenou').str.replace('1','1: Prvý rok po zmene')
+    results_summary[translation("gr1")] = results_summary[translation("gr1")].astype(str).str.replace('0',translation("gr4")).str.replace('1',translation("gr5"))
     return (results_summary,)
 
 
 @app.cell(hide_code=True)
 def _(coop_results_, ind_df_results, mo, pd, results_summary, translation):
-    last_period_ind = ind_df_results.groupby(['Scenár'], as_index=False)['Rok'].max()
-    last_period_coop = coop_results_.groupby(['Scenár'], as_index=False)['Rok'].max()
+    last_period_ind = ind_df_results.groupby([translation("gr2")], as_index=False)[translation("gr1")].max()
+    last_period_coop = coop_results_.groupby([translation("gr2")], as_index=False)[translation("gr1")].max()
 
-    latest_ind = ind_df_results.merge(last_period_ind, on=["Scenár",'Rok'], how='inner').rename(columns={'Individual payers fees': 'Výnos z poplatku', 'Individual bin count': 'Počet nádob'})
-    latest_ind['Rok'] = '2: Posledné prognóznované obdobie'
-    latest_ind['Platiteľ'] = 'IBV'
-    latest_coop = coop_results_.merge(last_period_coop, on=["Scenár",'Rok'], how='inner').rename(columns={'Coop fees': 'Výnos z poplatku', 'Coop bin count': 'Počet nádob'})
-    latest_coop['Rok'] = '2: Posledné prognóznované obdobie'
-    latest_coop['Platiteľ'] = 'BD a PO'
+    latest_ind = ind_df_results.merge(last_period_ind, on=[translation("gr2"),translation("gr1")], how='inner')
+    latest_ind[translation("gr1")] = translation("gr8")
+    latest_ind[translation("gr3")] = translation("gr6")
+    latest_coop = coop_results_.merge(last_period_coop, on=[translation("gr2"),translation("gr1")], how='inner')
+    latest_coop[translation("gr1")] = translation("gr8")
+    latest_coop[translation("gr3")] = translation("gr7")
 
     results_summary_latest = pd.concat([results_summary, latest_ind, latest_coop], ignore_index=True)
-    results_summary_latest['Výnos z poplatku'] = results_summary_latest['Výnos z poplatku'].round(0).astype(int)
-    results_summary_totals = results_summary_latest.groupby(['Scenár','Rok'], as_index=False)['Výnos z poplatku'].sum()
-    results_summary_totals['Platiteľ'] = 'Spolu'
+    results_summary_latest[translation('gr10')] = results_summary_latest[translation('gr10')].round(0).astype(int)
+    results_summary_totals = results_summary_latest.groupby([translation("gr2"),translation("gr1")], as_index=False)[translation('gr10')].sum()
+    results_summary_totals[translation("gr3")] = translation("gr9")
 
-    final_results = pd.concat([results_summary_latest, results_summary_totals], ignore_index=True).sort_values(by=['Scenár', 'Platiteľ', 'Rok'])
+    final_results = pd.concat([results_summary_latest, results_summary_totals], ignore_index=True).sort_values(by=[translation("gr2"), translation("gr3"), translation("gr1")])
 
-    results_pivot = pd.pivot(final_results, columns='Rok', index=['Scenár','Platiteľ'], values=['Výnos z poplatku'])
+    results_pivot = pd.pivot(final_results, columns=translation("gr1"), index=[translation("gr2"),translation("gr3")], values=[translation('gr10')])
 
     mo.vstack([
         mo.md(translation('r6')),
@@ -669,18 +670,18 @@ def _(coop_results_, ind_df_results, mo, pd, results_summary, translation):
 
 
 @app.cell(hide_code=True)
-def _(alt, ind_df_results, mo):
-    ind_fee_chart = mo.ui.altair_chart(alt.Chart(ind_df_results).mark_trail().encode(x='Rok', y="Individual payers fees", color='Scenár'), label="Vývoj výnosov z IBV v EUR")
+def _(alt, ind_df_results, mo, translation):
+    ind_fee_chart = mo.ui.altair_chart(alt.Chart(ind_df_results).mark_trail().encode(x=translation('gr1'), y=translation('gr10'), color=translation('gr2')), label=translation('ir1'))
 
     ind_fee_chart
     return
 
 
 @app.cell
-def _(alt, coop_results_, mo):
-    coop_fee_chart = mo.ui.altair_chart(alt.Chart(coop_results_).mark_trail().encode(x='Rok', y="Coop fees", color='Scenár'), label="Vývoj výnosov od bytových domov a PO v EUR")
+def _(alt, coop_results_, mo, translation):
+    coop_fee_chart = mo.ui.altair_chart(alt.Chart(coop_results_).mark_trail().encode(x=translation('gr1'), y=translation('gr10'), color=translation('gr2')), label=translation('cr3'))
 
-    coop_bin_chart = mo.ui.altair_chart(alt.Chart(coop_results_).mark_trail().encode(x='Rok', y="Coop bin count", color='Scenár'), label="Vývoj počtu nádob v bytových domoch a PO v EUR")
+    coop_bin_chart = mo.ui.altair_chart(alt.Chart(coop_results_).mark_trail().encode(x=translation('gr1'), y=translation('gr11'), color=translation('gr2')), label=translation('cr4'))
 
     mo.vstack([
         coop_fee_chart,
@@ -765,10 +766,10 @@ def _(
         index_array = indexer(periods)
         fees = simple_coop_forecast_fees.sum(axis=1) * index_array
 
-        results = pd.DataFrame({'Coop fees': fees,
-                               'Coop bin count': simple_coop_forecast_bins.sum(axis=1),
-                               'Rok': periods,
-                                'Scenár': translation('sc2')})
+        results = pd.DataFrame({translation('gr10'): fees,
+                               translation('gr11'): simple_coop_forecast_bins.sum(axis=1),
+                               translation('gr1'): periods,
+                                translation('gr2'): translation('sc2')})
         return results 
 
     coop_results = coop_result_simple(coop_old_bin_ratio, coop_old_fees, coop_old_points, fee_hike_coop.value, forecast_periods_coop.value, people_per_bin=persons_per_bin_coop.value, scenario=SCENARIO)
@@ -789,10 +790,10 @@ def _(SCENARIO, coop_results, indexer, np, pd, stepped_coop, translation):
 
 
         return pd.DataFrame(
-            {'Coop fees': stepped_coop_fees_total,
-             'Coop bin count': stepped_coop_bins_total,
-             'Rok': periods,
-             'Scenár': translation('sc1')})
+            {translation('gr10'): stepped_coop_fees_total,
+             translation('gr11'): stepped_coop_bins_total,
+             translation('gr1'): periods,
+             translation('gr2'): translation('sc1')})
 
     coop_results2 = coop_result_stepped(SCENARIO)
 
@@ -839,10 +840,10 @@ def _(ind_old_fees, indexer, np, pd, run_individual, translation):
         ind_fee_evolution_total = ind_fee_evolution_total * index_array
 
         return pd.DataFrame(
-        {'Individual payers fees': ind_fee_evolution_total,
-         'Individual bin count': ind_bin_evolution_total,
-         'Rok': periods,
-         'Scenár': translation('sc2')})
+        {translation('gr10'): ind_fee_evolution_total,
+         translation('gr11'): ind_bin_evolution_total,
+         translation('gr1'): periods,
+         translation('gr2'): translation('sc2')})
 
     return (ind_results_simple,)
 
@@ -869,9 +870,9 @@ def _(
 
         for step in ind_setup_editor.value.iterrows():
             step_values = step[1]
-            price_hike = price_hike + (step_values['Nárast poplatku v %'] / 100.)
+            price_hike = price_hike + (step_values[translation('t1')] / 100.)
             _new_fees = old_fees * (1 + price_hike)
-            _evolution = run_individual(baseline_bins, step_values['Odstup v rokoch']+1, 0, price_increase = price_hike, remove_weekly = step_values['Maximálne 14d interval'], scenario = scenario)
+            _evolution = run_individual(baseline_bins, step_values[translation('t2')]+1, 0, price_increase = price_hike, remove_weekly = step_values[translation('t3')], scenario = scenario)
             _fee_evolution = _evolution * _new_fees.T 
             if len(bin_evolution) == 0:
                 _fee_evolution[0] = _evolution[0] * old_fees.T
@@ -897,10 +898,10 @@ def _(
         stepped_ind_fees_total = stepped_ind_fees_total * index_array
 
         return pd.DataFrame(
-        {'Individual payers fees': stepped_ind_fees_total,
-         'Individual bin count': stepped_ind_bins_total,
-         'Rok': periods,
-         'Scenár': translation('sc1')})
+        {translation('gr10'): stepped_ind_fees_total,
+         translation('gr11'): stepped_ind_bins_total,
+         translation('gr1'): periods,
+         translation('gr2'): translation('sc1')})
 
     return (ind_results_stepped,)
 
@@ -974,7 +975,7 @@ def _(
             expenses.drop(columns=['yard_cost'], inplace=True)
 
         other_exp_base = other_cost_baseline.value 
-        periods = expenses['Rok'].values 
+        periods = expenses[translation("gr1")].values 
         index = indexer(periods)
         other_exp = index * other_exp_base
 
@@ -1003,7 +1004,7 @@ def _(
         stepped_detail = []
         simple_results = []
         stepped_results = []
-        COLS = ['Fee_forecast','Bin_forecast','Rok','Model']
+        COLS = [translation('gr10'),translation('gr11'),translation('gr1'),translation('gr2')]
         scenarios = {
             1: translation('d5'),
             2: translation('d6'),
@@ -1044,15 +1045,15 @@ def _(
             periods[1] = ind_stepped.shape[0]
 
             simple = pd.concat([coop_simple, ind_simple], ignore_index=True)
-            simple['Scenár'] = scenarios[scenario]
+            simple[translation('sc0')] = scenarios[scenario]
             simple_detail.append(simple)
-            simple_group = simple.groupby(['Scenár','Model','Rok'], as_index=False)[['Fee_forecast','Bin_forecast']].sum()
+            simple_group = simple.groupby([translation('sc0'),translation('gr2'),translation('gr1')], as_index=False)[[translation('gr10'),translation("gr11")]].sum()
             simple_results.append(simple_group)
 
             stepped = pd.concat([coop_stepped, ind_stepped], ignore_index=True)
-            stepped['Scenár'] = scenarios[scenario]
+            stepped[translation('sc0')] = scenarios[scenario]
             stepped_detail.append(stepped)
-            stepped_group = stepped.groupby(['Scenár','Model','Rok'], as_index=False)[['Fee_forecast','Bin_forecast']].sum()
+            stepped_group = stepped.groupby([translation('sc0'),translation('gr2'),translation('gr1')], as_index=False)[[translation('gr10'),translation("gr11")]].sum()
             stepped_results.append(stepped_group)
 
         # add NPC scenario 
@@ -1064,16 +1065,16 @@ def _(
         stepped_npc_fees = start_fee * stepped_indexer 
 
         simple_npc_df = pd.DataFrame(data={
-            'Scenár': [translation('sc3')]*periods[0],
-            'Model': [translation('sc2')]*periods[0],
-            'Rok': np.arange(periods[0]),
-            'Fee_forecast': simple_npc_fees}, index=np.arange(periods[0]))
+            translation('sc0'): [translation('sc3')]*periods[0],
+            translation('gr2'): [translation('sc2')]*periods[0],
+            translation('gr1'): np.arange(periods[0]),
+            translation('gr10'): simple_npc_fees}, index=np.arange(periods[0]))
 
         stepped_npc_df = pd.DataFrame(data={
-            'Scenár': [translation('sc3')]*periods[1],
-            'Model': [translation('sc1')]*periods[1],
-            'Rok': np.arange(periods[1]),
-            'Fee_forecast': stepped_npc_fees}, index=np.arange(periods[1]))
+            translation('sc0'): [translation('sc3')]*periods[1],
+            translation('gr2'): [translation('sc1')]*periods[1],
+            translation('gr1'): np.arange(periods[1]),
+            translation('gr10'): stepped_npc_fees}, index=np.arange(periods[1]))
 
 
         together = pd.concat(simple_results+stepped_results+[simple_npc_df, stepped_npc_df], ignore_index=True)
@@ -1081,8 +1082,8 @@ def _(
 
         # merge OLO
         expenses = build_expenses()
-        together = together.merge(expenses, on=['Rok'], how='left')
-        together['3 Podiel MČ'] = together.Fee_forecast * 0.1
+        together = together.merge(expenses, on=[translation('gr1')], how='left')
+        together['3 Podiel MČ'] = together[translation("gr10")] * 0.1
 
         return together, together_detail
 
@@ -1096,6 +1097,7 @@ def _(
     coop_old_points,
     coop_setup_editor,
     np,
+    translation,
 ):
     def bin_count_response(price_increase: float, period:int, people_per_bin:int = 45, previous_per_bin:int = 45, scale: float = 6.0, scenario: int = 1):
 
@@ -1167,9 +1169,9 @@ def _(
         for step in coop_setup_editor.value.iterrows():
 
             step_values = step[1]
-            price_hike = price_hike + (step_values['Nárast poplatku v %'] / 100.)
+            price_hike = price_hike + (step_values[translation('t1')] / 100.)
             _new_fees = old_fees * (1 + price_hike)
-            _evolution, _latest_ratio = bin_per_point_forecast(baseline_ratio, baseline_points, price_hike, step_values['Odstup v rokoch']+1, step_values['Počet ľudí na nádobu'], scenario=scenario)
+            _evolution, _latest_ratio = bin_per_point_forecast(baseline_ratio, baseline_points, price_hike, step_values[translation('t2')]+1, step_values[translation('t4')], scenario=scenario)
             _fee_evolution = _evolution * _new_fees.T 
             if len(bin_evolution) == 0:
                 _fee_evolution[0] = _evolution[0] * old_fees.T
