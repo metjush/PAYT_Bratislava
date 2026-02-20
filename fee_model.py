@@ -491,7 +491,7 @@ def _(alt, mo, organic_waste_pickup, results_overview, translation):
         _df = result_df.query('Model == @model')[[translation("gr1"),translation('gr10'),translation("sc0")]].copy()
         _standard = translation('d5')
         _exp_df = result_df.query(f'Model == @model and {translation("sc0")} == @_standard').drop(columns=[translation('gr10'),translation('gr11'),translation("sc0")])
-        _melt_exp = _exp_df.melt(id_vars=[translation("gr1")], value_vars=['1 OLO', '2 Ostatné náklady', '3 Podiel MČ', '4 OLO Zberné dvory'], var_name='Kategória',value_name='Náklady').sort_values(by=['Kategória'], ascending=True)
+        _melt_exp = _exp_df.melt(id_vars=[translation("gr1")], value_vars=['1 OLO', translation('olo1'), translation('olo3'), translation('olo2')], var_name=translation('olo4'),value_name=translation('olo5')).sort_values(by=[translation('olo4')], ascending=True)
 
         lines_chart = alt.Chart(_df).mark_trail().encode(alt.X(translation("gr1")).axis(format='0d', 
                                                                              tickCount=_df[translation("gr1")].max()), 
@@ -499,7 +499,7 @@ def _(alt, mo, organic_waste_pickup, results_overview, translation):
                                             color=alt.Color(translation("sc0")).scale(scheme='paired'))
 
         bar_chart = alt.Chart(_melt_exp).mark_bar(size=25).encode(alt.X(translation("gr1")).axis(format='0d', 
-                                                                             tickCount=_df[translation("gr1")].max()),y='Náklady',color='Kategória')
+                                                                             tickCount=_df[translation("gr1")].max()),y=translation('olo5'),color=translation('olo4'))
 
         return lines_chart + bar_chart 
 
@@ -967,11 +967,11 @@ def _(
 
         expenses = OLO.copy()
 
-        expenses['4 OLO Zberné dvory'] = 0.
+        expenses[translation('olo2')] = 0.
 
         if yard_takeover.value > 0:
             expenses = expenses.merge(yard_total[['year','yard_cost']], on='year', how='left')
-            expenses['4 OLO Zberné dvory'] = expenses['yard_cost'] * olo_multiplier.value
+            expenses[translation('olo2')] = expenses['yard_cost'] * olo_multiplier.value
             expenses.drop(columns=['yard_cost'], inplace=True)
 
         other_exp_base = other_cost_baseline.value 
@@ -979,7 +979,7 @@ def _(
         index = indexer(periods)
         other_exp = index * other_exp_base
 
-        expenses['2 Ostatné náklady'] = other_exp 
+        expenses[translation('olo1')] = other_exp 
         return expenses
 
     def results_overview():
@@ -1083,7 +1083,7 @@ def _(
         # merge OLO
         expenses = build_expenses()
         together = together.merge(expenses, on=[translation('gr1')], how='left')
-        together['3 Podiel MČ'] = together[translation("gr10")] * 0.1
+        together[translation('olo3')] = together[translation("gr10")] * 0.1
 
         return together, together_detail
 
